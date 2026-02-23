@@ -1,7 +1,8 @@
 -- Dimension tables for Omie dashboard
 
 CREATE TABLE IF NOT EXISTS dim_cliente (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo BIGINT UNIQUE NOT NULL,
     codigo_integracao TEXT,
     razao_social TEXT NOT NULL,
     nome_fantasia TEXT,
@@ -16,7 +17,8 @@ CREATE TABLE IF NOT EXISTS dim_cliente (
 );
 
 CREATE TABLE IF NOT EXISTS dim_conta_corrente (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo BIGINT UNIQUE NOT NULL,
     descricao TEXT NOT NULL,
     tipo TEXT,
     banco TEXT,
@@ -28,7 +30,8 @@ CREATE TABLE IF NOT EXISTS dim_conta_corrente (
 );
 
 CREATE TABLE IF NOT EXISTS dim_departamento (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo BIGINT UNIQUE NOT NULL,
     descricao TEXT NOT NULL,
     ativo BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -36,7 +39,8 @@ CREATE TABLE IF NOT EXISTS dim_departamento (
 );
 
 CREATE TABLE IF NOT EXISTS dim_categoria (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo TEXT UNIQUE NOT NULL,
     descricao TEXT NOT NULL,
     descricao_padrao TEXT,
     ativo BOOLEAN DEFAULT true,
@@ -45,7 +49,8 @@ CREATE TABLE IF NOT EXISTS dim_categoria (
 );
 
 CREATE TABLE IF NOT EXISTS dim_vendedor (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo BIGINT UNIQUE NOT NULL,
     nome TEXT NOT NULL,
     email TEXT,
     ativo BOOLEAN DEFAULT true,

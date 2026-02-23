@@ -1,7 +1,8 @@
 -- Fact tables
 
 CREATE TABLE IF NOT EXISTS fact_titulo_receber (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo_titulo BIGINT UNIQUE NOT NULL,
     codigo_integracao TEXT,
     cliente_id BIGINT REFERENCES dim_cliente(id),
     conta_corrente_id BIGINT REFERENCES dim_conta_corrente(id),
@@ -10,7 +11,7 @@ CREATE TABLE IF NOT EXISTS fact_titulo_receber (
     vendedor_id BIGINT REFERENCES dim_vendedor(id),
     numero_documento TEXT,
     numero_parcela TEXT,
-    data_emissao DATE NOT NULL,
+    data_emissao DATE,
     data_vencimento DATE NOT NULL,
     data_previsao DATE,
     data_registro DATE,
@@ -28,7 +29,8 @@ CREATE TABLE IF NOT EXISTS fact_titulo_receber (
 );
 
 CREATE TABLE IF NOT EXISTS fact_recebimento (
-    id BIGINT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    omie_codigo_lancamento BIGINT UNIQUE NOT NULL,
     codigo_baixa_integracao TEXT,
     titulo_id BIGINT REFERENCES fact_titulo_receber(id),
     conta_corrente_id BIGINT REFERENCES dim_conta_corrente(id),
@@ -46,6 +48,7 @@ CREATE TABLE IF NOT EXISTS fact_recebimento (
 
 CREATE TABLE IF NOT EXISTS fact_extrato_cc (
     id BIGSERIAL PRIMARY KEY,
+    omie_codigo_movimento BIGINT UNIQUE NOT NULL,
     conta_corrente_id BIGINT REFERENCES dim_conta_corrente(id),
     data_lancamento DATE NOT NULL,
     descricao TEXT,
