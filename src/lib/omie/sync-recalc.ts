@@ -92,6 +92,14 @@ async function recalcManual(): Promise<{ updated: number }> {
     from += PAGE;
   }
 
+  console.log(`[recalc] Loaded ${recebimentos.length} recebimentos, ${titulos.length} titulos, ${tituloAgg.size} unique titulo aggregations`);
+
+  // Debug: sample some keys
+  const aggKeys = [...tituloAgg.keys()].slice(0, 5);
+  const titKeys = titulos.slice(0, 5).map(t => t.omie_codigo_titulo);
+  console.log(`[recalc] Sample agg keys: ${aggKeys.join(', ')}`);
+  console.log(`[recalc] Sample titulo omie_codigos: ${titKeys.join(', ')}`);
+
   let updated = 0;
   const CHUNK = 100;
   const updates: { id: number; caixa_recebido: number; desconto_concedido: number; principal_liquidado: number; saldo_em_aberto: number }[] = [];
