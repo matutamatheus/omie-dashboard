@@ -55,7 +55,8 @@ async function recalcManual(): Promise<{ updated: number }> {
   }>();
 
   for (const r of recebimentos ?? []) {
-    const key = r.omie_codigo_lancamento;
+    const key = Number(r.omie_codigo_lancamento);
+    if (!key || isNaN(key)) continue;
     const existing = tituloAgg.get(key);
     const baixado = Number(r.valor_baixado) || 0;
     const desconto = Number(r.valor_desconto) || 0;
@@ -105,7 +106,7 @@ async function recalcManual(): Promise<{ updated: number }> {
   const updates: { id: number; caixa_recebido: number; desconto_concedido: number; principal_liquidado: number; saldo_em_aberto: number }[] = [];
 
   for (const titulo of titulos ?? []) {
-    const agg = tituloAgg.get(titulo.omie_codigo_titulo);
+    const agg = tituloAgg.get(Number(titulo.omie_codigo_titulo));
     if (!agg) continue;
 
     const valorDoc = Number(titulo.valor_documento) || 0;
@@ -120,25 +121,20 @@ async function recalcManual(): Promise<{ updated: number }> {
     });
   }
 
-  // Update in chunks
-  for (let i = 0; i < updates.length; i += CHUNK) {
-    const chunk = updates.slice(i, i + CHUNK);
-    for (const upd of chunk) {
-      const { error: updErr } = await supabaseAdmin
-        .from('fact_titulo_receber')
-        .update({
-          caixa_recebido: upd.caixa_recebido,
-          desconto_concedido: upd.desconto_concedido,
-          principal_liquidado: upd.principal_liquidado,
-          saldo_em_aberto: upd.saldo_em_aberto,
-        })
-        .eq('id', upd.id);
+  console.log(`[recalc] Found ${updates.length} titulos to update`);
 
-      if (updErr) {
-        console.error(`[recalc] Failed to update titulo ${upd.id}:`, updErr.message);
-      } else {
-        updated++;
-      }
+  // Batch upsert using id as conflict column
+  const BATCH = 500;
+  for (let i = 0; i < updates.length; i += BATCH) {
+    const batch = updates.slice(i, i + BATCH);
+    const { error: updErr, count } = await supabaseAdmin
+      .from('fact_titulo_receber')
+      .upsert(batch, { onConflict: 'id', count: 'exact' });
+
+    if (updErr) {
+      console.error(`[recalc] Batch update failed at ${i}:`, updErr.message);
+    } else {
+      updated += count ?? batch.length;
     }
   }
 
