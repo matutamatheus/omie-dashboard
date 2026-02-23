@@ -94,6 +94,11 @@ export async function syncContaReceber(
     const firstDept = cr.distribuicao?.[0]?.codigo_departamento;
     const deptOmie = firstDept ? Number(firstDept) : undefined;
 
+    // For liquidated titles, saldo is 0; otherwise saldo = valor_documento
+    // (will be refined after recebimentos sync calculates actual payments)
+    const isLiquidado = cr.status_titulo === 'LIQUIDADO' || cr.status_titulo === 'CANCELADO';
+    const saldo = isLiquidado ? 0 : cr.valor_documento;
+
     return {
       omie_codigo_titulo: cr.codigo_lancamento_omie,
       codigo_integracao: cr.codigo_lancamento_integracao || null,
@@ -117,6 +122,7 @@ export async function syncContaReceber(
       data_previsao: parseOmieDate(cr.data_previsao),
       data_registro: parseOmieDate(cr.data_registro),
       valor_documento: cr.valor_documento,
+      saldo_em_aberto: saldo,
       status_titulo: cr.status_titulo,
       observacao: cr.observacao || null,
       updated_at: new Date().toISOString(),

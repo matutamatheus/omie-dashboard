@@ -8,6 +8,7 @@ import {
 } from '@/lib/omie/sync-dimensions';
 import { syncContaReceber } from '@/lib/omie/sync-contareceber';
 import { syncRecebimentos } from '@/lib/omie/sync-recebimentos';
+import { recalcTituloMetrics } from '@/lib/omie/sync-recalc';
 
 export const maxDuration = 60;
 
@@ -19,6 +20,7 @@ const VALID_STEPS = [
   'vendedores',
   'titulos',
   'recebimentos',
+  'recalc',
 ] as const;
 
 type StepName = (typeof VALID_STEPS)[number];
@@ -76,6 +78,9 @@ export async function POST(request: NextRequest) {
         break;
       case 'recebimentos':
         result = await syncRecebimentos(fromPage, toPage);
+        break;
+      case 'recalc':
+        result = await recalcTituloMetrics();
         break;
     }
 
