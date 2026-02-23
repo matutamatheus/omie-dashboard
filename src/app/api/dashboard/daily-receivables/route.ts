@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
     statusTitulo: params.get('statusTitulo') ? params.get('statusTitulo')!.split(',') : undefined,
   };
 
-  const data = await getDailyReceivables(filters);
+  const rangeStart = params.get('rangeStart') || undefined;
+  const rangeEnd = params.get('rangeEnd') || undefined;
+
+  const data = await getDailyReceivables(filters, rangeStart, rangeEnd);
   return NextResponse.json(data);
 }
