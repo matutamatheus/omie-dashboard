@@ -16,7 +16,7 @@ export async function recalcTituloMetrics(): Promise<{ updated: number }> {
 
   if (error) {
     // If the RPC doesn't exist yet, fall back to manual calculation
-    if (error.message.includes('not exist') || error.code === '42883') {
+    if (error.message.includes('not find') || error.message.includes('not exist') || error.code === '42883') {
       return recalcManual();
     }
     throw new Error(`recalc_titulo_metrics RPC: ${error.message}`);
