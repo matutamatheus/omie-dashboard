@@ -1,68 +1,51 @@
 import { supabaseAdmin } from '../supabase/admin';
 
-/**
- * Recalculate derived columns on fact_titulo_receber based on fact_recebimento data.
- *
- * For each titulo that has recebimentos:
- *   - caixa_recebido = sum(valor_baixado + valor_juros + valor_multa)
- *   - desconto_concedido = sum(valor_desconto)
- *   - principal_liquidado = sum(valor_baixado + valor_desconto)
- *   - saldo_em_aberto = max(0, valor_documento - principal_liquidado)
- *
- * Uses a raw SQL query for efficiency (single UPDATE from aggregated subquery).
- */
-export async function recalcTituloMetrics(): Promise<{ updated: number }> {
-  const { data, error } = await supabaseAdmin.rpc('recalc_titulo_metrics');
-
-  if (error) {
-    // If the RPC doesn't exist yet, fall back to manual calculation
-    if (error.message.includes('not find') || error.message.includes('not exist') || error.code === '42883') {
-      return recalcManual();
-    }
-    throw new Error(`recalc_titulo_metrics RPC: ${error.message}`);
-  }
-
-  return { updated: data ?? 0 };
+export interface RecalcResult {
+  updated: number;
+  recebimentosLoaded: number;
+  titulosLoaded: number;
+  aggregations: number;
+  matchesFound: number;
+  errors: string[];
 }
 
 /**
- * Fallback: manually query recebimentos and update titulos in JS.
+ * Recalculate derived columns on fact_titulo_receber based on fact_recebimento data.
  */
-async function recalcManual(): Promise<{ updated: number }> {
-  // Get all recebimento data - paginate since Supabase has 1000 row default limit
-  const recebimentos: { omie_codigo_lancamento: number; valor_baixado: number; valor_desconto: number; valor_juros: number; valor_multa: number }[] = [];
+export async function recalcTituloMetrics(): Promise<RecalcResult> {
+  const errors: string[] = [];
+
+  // 1. Load all recebimentos
+  const recebimentos: Record<string, unknown>[] = [];
   let from = 0;
   const PAGE = 5000;
 
   while (true) {
-    const { data, error: recErr } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('fact_recebimento')
       .select('omie_codigo_lancamento, valor_baixado, valor_desconto, valor_juros, valor_multa')
       .range(from, from + PAGE - 1);
 
-    if (recErr) throw new Error(`Query fact_recebimento: ${recErr.message}`);
+    if (error) { errors.push(`Query recebimentos: ${error.message}`); break; }
     if (!data || data.length === 0) break;
     recebimentos.push(...data);
     if (data.length < PAGE) break;
     from += PAGE;
   }
 
-  // Aggregate by titulo omie_codigo (omie_codigo_lancamento = titulo's omie_codigo)
-  const tituloAgg = new Map<number, {
-    caixa: number;
-    desconto: number;
-    liquidado: number;
-  }>();
+  // 2. Aggregate by titulo omie_codigo
+  const tituloAgg = new Map<number, { caixa: number; desconto: number; liquidado: number }>();
 
-  for (const r of recebimentos ?? []) {
+  for (const r of recebimentos) {
     const key = Number(r.omie_codigo_lancamento);
     if (!key || isNaN(key)) continue;
-    const existing = tituloAgg.get(key);
+
     const baixado = Number(r.valor_baixado) || 0;
     const desconto = Number(r.valor_desconto) || 0;
     const juros = Number(r.valor_juros) || 0;
     const multa = Number(r.valor_multa) || 0;
 
+    const existing = tituloAgg.get(key);
     if (existing) {
       existing.caixa += baixado + juros + multa;
       existing.desconto += desconto;
@@ -76,44 +59,36 @@ async function recalcManual(): Promise<{ updated: number }> {
     }
   }
 
-  // Get all titulos - paginate
-  const titulos: { id: number; omie_codigo_titulo: number; valor_documento: number }[] = [];
+  // 3. Load all titulos
+  const titulos: Record<string, unknown>[] = [];
   from = 0;
 
   while (true) {
-    const { data, error: titErr } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('fact_titulo_receber')
       .select('id, omie_codigo_titulo, valor_documento')
       .range(from, from + PAGE - 1);
 
-    if (titErr) throw new Error(`Query fact_titulo_receber: ${titErr.message}`);
+    if (error) { errors.push(`Query titulos: ${error.message}`); break; }
     if (!data || data.length === 0) break;
     titulos.push(...data);
     if (data.length < PAGE) break;
     from += PAGE;
   }
 
-  console.log(`[recalc] Loaded ${recebimentos.length} recebimentos, ${titulos.length} titulos, ${tituloAgg.size} unique titulo aggregations`);
-
-  // Debug: sample some keys
-  const aggKeys = [...tituloAgg.keys()].slice(0, 5);
-  const titKeys = titulos.slice(0, 5).map(t => t.omie_codigo_titulo);
-  console.log(`[recalc] Sample agg keys: ${aggKeys.join(', ')}`);
-  console.log(`[recalc] Sample titulo omie_codigos: ${titKeys.join(', ')}`);
-
-  let updated = 0;
-  const CHUNK = 100;
+  // 4. Build updates
   const updates: { id: number; caixa_recebido: number; desconto_concedido: number; principal_liquidado: number; saldo_em_aberto: number }[] = [];
 
-  for (const titulo of titulos ?? []) {
-    const agg = tituloAgg.get(Number(titulo.omie_codigo_titulo));
+  for (const titulo of titulos) {
+    const omieCode = Number(titulo.omie_codigo_titulo);
+    const agg = tituloAgg.get(omieCode);
     if (!agg) continue;
 
     const valorDoc = Number(titulo.valor_documento) || 0;
     const saldo = Math.max(0, valorDoc - agg.liquidado);
 
     updates.push({
-      id: titulo.id,
+      id: Number(titulo.id),
       caixa_recebido: Math.round(agg.caixa * 100) / 100,
       desconto_concedido: Math.round(agg.desconto * 100) / 100,
       principal_liquidado: Math.round(agg.liquidado * 100) / 100,
@@ -121,22 +96,29 @@ async function recalcManual(): Promise<{ updated: number }> {
     });
   }
 
-  console.log(`[recalc] Found ${updates.length} titulos to update`);
-
-  // Batch upsert using id as conflict column
+  // 5. Batch upsert
+  let updated = 0;
   const BATCH = 500;
+
   for (let i = 0; i < updates.length; i += BATCH) {
     const batch = updates.slice(i, i + BATCH);
-    const { error: updErr, count } = await supabaseAdmin
+    const { error, count } = await supabaseAdmin
       .from('fact_titulo_receber')
       .upsert(batch, { onConflict: 'id', count: 'exact' });
 
-    if (updErr) {
-      console.error(`[recalc] Batch update failed at ${i}:`, updErr.message);
+    if (error) {
+      errors.push(`Batch upsert at ${i}: ${error.message}`);
     } else {
       updated += count ?? batch.length;
     }
   }
 
-  return { updated };
+  return {
+    updated,
+    recebimentosLoaded: recebimentos.length,
+    titulosLoaded: titulos.length,
+    aggregations: tituloAgg.size,
+    matchesFound: updates.length,
+    errors,
+  };
 }
