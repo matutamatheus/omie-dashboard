@@ -1,6 +1,7 @@
 export {
   getKPIs,
   getHorizons,
+  getDailyReceivables,
   getTitulos,
   getRecebimentos,
   getDimensionOptions,

@@ -58,6 +58,12 @@ export interface DimensionOptions {
   vendedores: { id: number; label: string }[];
 }
 
+export interface DailyReceivable {
+  date: string;       // dd/MM/yyyy
+  dateISO: string;    // yyyy-MM-dd
+  saldo: number;
+}
+
 export interface PaginatedResult<T> {
   rows: T[];
   total: number;

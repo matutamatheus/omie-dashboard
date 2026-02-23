@@ -4,6 +4,7 @@ import { toISODate, getHorizonRange, HORIZON_LABELS, type HorizonKey } from '@/l
 import type {
   KPIData,
   HorizonData,
+  DailyReceivable,
   TituloRow,
   RecebimentoRow,
   DimensionOptions,
@@ -144,7 +145,41 @@ export async function getHorizons(filters: DashboardFilters): Promise<HorizonDat
 }
 
 // ---------------------------------------------------------------------------
-// 3. getTitulos
+// 3. getDailyReceivables - A Receber por dia
+// ---------------------------------------------------------------------------
+
+export async function getDailyReceivables(filters: DashboardFilters): Promise<DailyReceivable[]> {
+  const rows = await fetchAllRows<{ data_vencimento: string; saldo_em_aberto: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('data_vencimento, saldo_em_aberto')
+      .gt('saldo_em_aberto', 0)
+      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+      .gte('data_vencimento', filters.dateStart)
+      .lte('data_vencimento', filters.dateEnd)
+      .order('data_vencimento', { ascending: true })
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+
+  const byDay = new Map<string, number>();
+  for (const r of rows) {
+    const dateISO = r.data_vencimento;
+    byDay.set(dateISO, (byDay.get(dateISO) || 0) + (Number(r.saldo_em_aberto) || 0));
+  }
+
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateISO, saldo]) => ({
+      date: format(new Date(dateISO), 'dd/MM'),
+      dateISO,
+      saldo,
+    }));
+}
+
+// ---------------------------------------------------------------------------
+// 4. getTitulos
 // ---------------------------------------------------------------------------
 
 export async function getTitulos(

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FilterBar } from '@/components/filters/FilterBar';
 import { KPICards } from '@/components/dashboard/KPICards';
 import { HorizonBarChart } from '@/components/charts/HorizonBarChart';
+import { DailyReceivablesChart } from '@/components/charts/DailyReceivablesChart';
 import { TitulosTable } from '@/components/tables/TitulosTable';
 import { RecebimentosTable } from '@/components/tables/RecebimentosTable';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -52,6 +53,7 @@ export function DashboardShell() {
         <FilterBar filters={filters} onChange={setFilters} />
         <KPICards filters={filters} />
         <HorizonBarChart filters={filters} />
+        <DailyReceivablesChart filters={filters} />
         <TitulosTable filters={filters} />
         <RecebimentosTable filters={filters} />
       </main>
