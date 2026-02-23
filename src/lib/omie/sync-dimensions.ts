@@ -209,7 +209,7 @@ export interface DimensionSyncResult {
 
 export async function syncAllDimensions(): Promise<DimensionSyncResult[]> {
   const tasks: { entity: string; fn: () => Promise<number> }[] = [
-    { entity: 'dim_cliente', fn: syncClientes },
+    { entity: 'dim_cliente', fn: async () => (await syncClientes()).records },
     { entity: 'dim_conta_corrente', fn: syncContasCorrentes },
     { entity: 'dim_departamento', fn: syncDepartamentos },
     { entity: 'dim_categoria', fn: syncCategorias },
