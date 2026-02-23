@@ -52,9 +52,9 @@ export const ClienteSchema = z.object({
 
 export type OmieCliente = z.infer<typeof ClienteSchema>;
 
-// Movimento Financeiro
+// Movimento Financeiro (ListarMovimentos on /financas/mf/)
 export const MovimentoFinanceiroSchema = z.object({
-  nCodMov: z.number().optional(),
+  nCodMovimento: z.number().optional(),
   nCodTitulo: z.number().optional(),
   nCodCliente: z.number().optional(),
   cNumDocumento: z.string().optional().default(''),
@@ -78,31 +78,31 @@ export const MovimentoFinanceiroSchema = z.object({
 
 export type MovimentoFinanceiro = z.infer<typeof MovimentoFinanceiroSchema>;
 
-// Conta Corrente
+// Conta Corrente - field names match real Omie API response
 export const ContaCorrenteSchema = z.object({
   nCodCC: z.number(),
-  cDescricao: z.string(),
-  cTipo: z.string().optional().default(''),
-  cCodBanco: z.string().optional().default(''),
-  cNumAgencia: z.string().optional().default(''),
-  cNumCC: z.string().optional().default(''),
-  cInativo: z.string().optional().default('N'),
+  descricao: z.string(),
+  tipo_conta_corrente: z.string().optional().default(''),
+  codigo_banco: z.string().optional().default(''),
+  codigo_agencia: z.string().optional().default(''),
+  numero_conta_corrente: z.string().optional().default(''),
+  inativo: z.string().optional().default('N'),
 }).passthrough();
 
 export type OmieContaCorrente = z.infer<typeof ContaCorrenteSchema>;
 
-// Departamento
+// Departamento - codigo is a string in the API
 export const DepartamentoSchema = z.object({
-  codigo: z.number(),
+  codigo: z.string(),
   descricao: z.string(),
   inativo: z.string().optional().default('N'),
 }).passthrough();
 
 export type OmieDepartamento = z.infer<typeof DepartamentoSchema>;
 
-// Categoria
+// Categoria - codigo is a string (e.g. "1.01.01")
 export const CategoriaSchema = z.object({
-  codigo: z.number(),
+  codigo: z.string(),
   descricao: z.string(),
   descricao_padrao: z.string().optional().default(''),
   conta_inativa: z.string().optional().default('N'),

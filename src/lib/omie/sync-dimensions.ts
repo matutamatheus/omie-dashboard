@@ -98,12 +98,12 @@ export async function syncContasCorrentes(): Promise<number> {
 
   const rows = parsed.map((cc) => ({
     omie_codigo: cc.nCodCC,
-    descricao: cc.cDescricao,
-    tipo: cc.cTipo || null,
-    banco: cc.cCodBanco || null,
-    agencia: cc.cNumAgencia || null,
-    conta: cc.cNumCC || null,
-    ativo: cc.cInativo !== 'S',
+    descricao: cc.descricao,
+    tipo: cc.tipo_conta_corrente || null,
+    banco: cc.codigo_banco || null,
+    agencia: cc.codigo_agencia || null,
+    conta: cc.numero_conta_corrente || null,
+    ativo: cc.inativo !== 'S',
     updated_at: new Date().toISOString(),
   }));
 
@@ -122,11 +122,11 @@ export async function syncDepartamentos(): Promise<number> {
   const parsed = safeParse(DepartamentoSchema, raw);
 
   const rows = parsed.map((d) => ({
-    omie_codigo: d.codigo,
+    omie_codigo: Number(d.codigo),
     descricao: d.descricao,
     ativo: d.inativo !== 'S',
     updated_at: new Date().toISOString(),
-  }));
+  })).filter((r) => !isNaN(r.omie_codigo));
 
   return upsertBatch('dim_departamento', rows, 'omie_codigo');
 }
