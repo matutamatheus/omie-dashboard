@@ -18,13 +18,14 @@ export async function recalcTituloMetrics(): Promise<RecalcResult> {
   // 1. Load all recebimentos
   const recebimentos: Record<string, unknown>[] = [];
   let from = 0;
-  const PAGE = 5000;
+  const PAGE = 1000;
 
   while (true) {
     const { data, error } = await supabaseAdmin
       .from('fact_recebimento')
       .select('omie_codigo_lancamento, valor_baixado, valor_desconto, valor_juros, valor_multa')
-      .range(from, from + PAGE - 1);
+      .range(from, from + PAGE - 1)
+      .limit(PAGE);
 
     if (error) { errors.push(`Query recebimentos: ${error.message}`); break; }
     if (!data || data.length === 0) break;
@@ -67,7 +68,8 @@ export async function recalcTituloMetrics(): Promise<RecalcResult> {
     const { data, error } = await supabaseAdmin
       .from('fact_titulo_receber')
       .select('id, omie_codigo_titulo, valor_documento')
-      .range(from, from + PAGE - 1);
+      .range(from, from + PAGE - 1)
+      .limit(PAGE);
 
     if (error) { errors.push(`Query titulos: ${error.message}`); break; }
     if (!data || data.length === 0) break;
