@@ -149,14 +149,17 @@ export async function getHorizons(filters: DashboardFilters): Promise<HorizonDat
 // ---------------------------------------------------------------------------
 
 export async function getDailyReceivables(filters: DashboardFilters): Promise<DailyReceivable[]> {
+  const today = todayISO();
+  const endDate = toISODate(new Date(Date.now() + 180 * 24 * 60 * 60 * 1000));
+
   const rows = await fetchAllRows<{ data_vencimento: string; saldo_em_aberto: number }>((from, to) => {
     const q = supabaseAdmin
       .from('fact_titulo_receber')
       .select('data_vencimento, saldo_em_aberto')
       .gt('saldo_em_aberto', 0)
       .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
-      .gte('data_vencimento', filters.dateStart)
-      .lte('data_vencimento', filters.dateEnd)
+      .gte('data_vencimento', today)
+      .lte('data_vencimento', endDate)
       .order('data_vencimento', { ascending: true })
       .range(from, to);
     applyDimensionFilters(q, filters);

@@ -29,7 +29,7 @@ export function DailyReceivablesChart({ filters }: Props) {
   return (
     <Card>
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-        A Receber por Dia
+        Vencimentos Futuros por Dia (próximos 6 meses)
       </h3>
       {loading ? (
         <div className="h-72 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />
