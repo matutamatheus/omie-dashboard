@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/formatters';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { RecebimentoRow, DashboardFilters, PaginatedResult } from '@/types/dashboard';
 
@@ -17,12 +18,9 @@ export function RecebimentosTable({ filters }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-      page: String(page),
-      pageSize: '20',
-    });
+    const params = buildFilterParams(filters);
+    params.set('page', String(page));
+    params.set('pageSize', '20');
 
     fetch(`/api/dashboard/recebimentos?${params}`)
       .then((r) => r.json())
@@ -38,7 +36,7 @@ export function RecebimentosTable({ filters }: Props) {
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          Recebimentos / Baixas no Período
+          Recebimentos / Baixas no Periodo
         </h3>
         <span className="text-xs text-gray-400">
           {result ? `${result.total} registros` : ''}
@@ -79,7 +77,7 @@ export function RecebimentosTable({ filters }: Props) {
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-gray-400 text-sm">
-                      Nenhum recebimento no período selecionado
+                      Nenhum recebimento no periodo selecionado
                     </td>
                   </tr>
                 )}
@@ -89,7 +87,7 @@ export function RecebimentosTable({ filters }: Props) {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4 px-3">
-              <span className="text-xs text-gray-400">Página {page} de {totalPages}</span>
+              <span className="text-xs text-gray-400">Pagina {page} de {totalPages}</span>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPage(Math.max(1, page - 1))}

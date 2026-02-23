@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils/cn';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import type { AgingClientData, DashboardFilters } from '@/types/dashboard';
 
 function intensityClass(value: number, max: number): string {
@@ -25,11 +26,8 @@ export function AgingHeatmap({ filters }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      type: 'clients',
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-    });
+    const params = buildFilterParams(filters);
+    params.set('type', 'clients');
 
     fetch(`/api/dashboard/aging?${params}`)
       .then((r) => r.json())

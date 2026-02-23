@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils/cn';
-import { formatCurrency, formatPercent, formatCompactCurrency } from '@/lib/utils/formatters';
+import { formatCompactCurrency, formatPercent } from '@/lib/utils/formatters';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import { DollarSign, TrendingUp, AlertTriangle, Percent, Users, TrendingDown } from 'lucide-react';
 import type { KPIData, DashboardFilters } from '@/types/dashboard';
 import type { LucideIcon } from 'lucide-react';
@@ -59,14 +60,7 @@ export function KPICards({ filters }: KPICardsProps) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-      mode: filters.mode,
-    });
-    if (filters.contaCorrenteId) params.set('contaCorrenteId', String(filters.contaCorrenteId));
-    if (filters.departamentoId) params.set('departamentoId', String(filters.departamentoId));
-    if (filters.vendedorId) params.set('vendedorId', String(filters.vendedorId));
+    const params = buildFilterParams(filters);
 
     fetch(`/api/dashboard/kpis?${params}`)
       .then((r) => r.json())
@@ -79,9 +73,9 @@ export function KPICards({ filters }: KPICardsProps) {
     { title: 'Recebido (Caixa)', value: data ? formatCompactCurrency(data.recebido) : '', icon: DollarSign, color: 'green' },
     { title: 'Previsto', value: data ? formatCompactCurrency(data.previsto) : '', icon: TrendingUp, color: 'blue' },
     { title: 'Em Atraso', value: data ? formatCompactCurrency(data.emAtraso) : '', icon: AlertTriangle, color: 'red' },
-    { title: 'Taxa Inadimplência', value: data ? formatPercent(data.taxaInadimplencia) : '', icon: Percent, color: 'amber' },
+    { title: 'Taxa Inadimplencia', value: data ? formatPercent(data.taxaInadimplencia) : '', icon: Percent, color: 'amber' },
     { title: 'Clientes Inadimplentes', value: data ? String(data.clientesInadimplentes) : '', icon: Users, color: 'red' },
-    { title: 'Churn Recebíveis', value: data ? formatPercent(data.churnRecebiveis) : '', icon: TrendingDown, color: 'orange' },
+    { title: 'Churn Recebiveis', value: data ? formatPercent(data.churnRecebiveis) : '', icon: TrendingDown, color: 'orange' },
   ];
 
   return (

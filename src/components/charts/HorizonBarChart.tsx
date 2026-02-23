@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/formatters';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import type { HorizonData, DashboardFilters } from '@/types/dashboard';
 
 const COLORS = ['#3b82f6', '#2563eb', '#1d4ed8', '#1e40af', '#1e3a8a', '#172554', '#0f172a'];
@@ -18,12 +19,8 @@ export function HorizonBarChart({ filters }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      type: 'horizons',
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-      mode: filters.mode,
-    });
+    const params = buildFilterParams(filters);
+    params.set('type', 'horizons');
 
     fetch(`/api/dashboard/trends?${params}`)
       .then((r) => r.json())
@@ -35,7 +32,7 @@ export function HorizonBarChart({ filters }: Props) {
   return (
     <Card>
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-        Previsto por Horizonte ({filters.mode === 'previsao' ? 'Previsão' : 'Vencimento'})
+        Previsto por Horizonte ({filters.mode === 'previsao' ? 'Previsao' : 'Vencimento'})
       </h3>
       {loading ? (
         <div className="h-64 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />

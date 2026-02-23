@@ -21,13 +21,10 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
   const [preset, setPreset] = useState('30d');
 
   useEffect(() => {
-    fetch('/api/dashboard/trends?type=dimensions')
+    fetch('/api/dashboard/dimensions')
+      .then((res) => res.json())
+      .then((data) => setDimensions(data))
       .catch(() => null);
-
-    // Load dimensions from mock
-    import('@/lib/mock/data-provider').then((mod) =>
-      mod.getDimensionOptions().then(setDimensions)
-    );
   }, []);
 
   const handleReset = () => {

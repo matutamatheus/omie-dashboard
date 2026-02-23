@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { formatCurrency } from '@/lib/utils/formatters';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { TituloRow, DashboardFilters, PaginatedResult } from '@/types/dashboard';
 
@@ -20,13 +21,9 @@ export function TitulosTable({ filters }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-      mode: filters.mode,
-      page: String(page),
-      pageSize: '20',
-    });
+    const params = buildFilterParams(filters);
+    params.set('page', String(page));
+    params.set('pageSize', '20');
 
     fetch(`/api/dashboard/titulos?${params}`)
       .then((r) => r.json())
@@ -63,7 +60,7 @@ export function TitulosTable({ filters }: Props) {
       onClick={() => handleSort(field)}
       className="text-left py-2.5 px-3 font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 text-xs select-none"
     >
-      {label} {sortField === field ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+      {label} {sortField === field ? (sortDir === 'asc' ? '\u2191' : '\u2193') : ''}
     </th>
   );
 
@@ -71,10 +68,10 @@ export function TitulosTable({ filters }: Props) {
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          Títulos em Aberto
+          Titulos em Aberto
         </h3>
         <span className="text-xs text-gray-400">
-          {result ? `${result.total} títulos` : ''}
+          {result ? `${result.total} titulos` : ''}
         </span>
       </div>
 
@@ -114,7 +111,7 @@ export function TitulosTable({ filters }: Props) {
                       </span>
                     </td>
                     <td className="py-2 px-3"><StatusBadge status={row.status} /></td>
-                    <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{row.vendedor}</td>
+                    <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{row.vendedor || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -123,7 +120,7 @@ export function TitulosTable({ filters }: Props) {
 
           <div className="flex items-center justify-between mt-4 px-3">
             <span className="text-xs text-gray-400">
-              Página {page} de {totalPages}
+              Pagina {page} de {totalPages}
             </span>
             <div className="flex gap-2">
               <button

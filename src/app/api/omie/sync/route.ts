@@ -39,10 +39,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (process.env.NEXT_PUBLIC_DATA_MODE === 'mock') {
-    return NextResponse.json({ message: 'Mock mode - sync skipped' });
-  }
-
   const step = request.nextUrl.searchParams.get('step') as StepName | null;
 
   if (!step || !VALID_STEPS.includes(step)) {

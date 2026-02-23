@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/formatters';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import type { AgingBucketData, DashboardFilters } from '@/types/dashboard';
 
 const BUCKET_COLORS: Record<string, string> = {
@@ -24,11 +25,8 @@ export function AgingStackedBars({ filters }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      type: 'buckets',
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-    });
+    const params = buildFilterParams(filters);
+    params.set('type', 'buckets');
 
     fetch(`/api/dashboard/aging?${params}`)
       .then((r) => r.json())

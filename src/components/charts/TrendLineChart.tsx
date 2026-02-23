@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency } from '@/lib/utils/formatters';
+import { buildFilterParams } from '@/lib/utils/filter-params';
 import type { TrendPoint, DashboardFilters } from '@/types/dashboard';
 
 interface Props {
@@ -16,12 +17,8 @@ export function TrendLineChart({ filters }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({
-      type: 'timeline',
-      dateStart: filters.dateStart,
-      dateEnd: filters.dateEnd,
-      mode: filters.mode,
-    });
+    const params = buildFilterParams(filters);
+    params.set('type', 'timeline');
 
     fetch(`/api/dashboard/trends?${params}`)
       .then((r) => r.json())

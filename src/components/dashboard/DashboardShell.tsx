@@ -44,8 +44,8 @@ export function DashboardShell() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">
-              {process.env.NEXT_PUBLIC_DATA_MODE === 'real' ? 'Produção' : 'Mock'}
+            <span className="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium">
+              Produção
             </span>
             <ThemeToggle />
           </div>
@@ -72,7 +72,7 @@ export function DashboardShell() {
 
       <footer className="border-t border-gray-200 dark:border-gray-700 py-4">
         <p className="text-center text-xs text-gray-400">
-          Dashboard Recebimentos Omie — Dados {process.env.NEXT_PUBLIC_DATA_MODE === 'real' ? 'em tempo real' : 'mock para demonstração'}
+          Dashboard Recebimentos Omie — Dados em tempo real
         </p>
       </footer>
     </div>

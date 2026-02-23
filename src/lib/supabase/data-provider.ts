@@ -39,6 +39,27 @@ function daysOverdueFromString(dateStr: string): number {
   return Math.max(0, diff);
 }
 
+/**
+ * Fetch all rows from a Supabase query, paginating through 1000-row pages.
+ * Supabase PostgREST has a max_rows=1000 default. This helper pages through.
+ */
+async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => any,
+): Promise<T[]> {
+  const PAGE = 1000;
+  const results: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    results.push(...(data as T[]));
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return results;
+}
+
 // ---------------------------------------------------------------------------
 // 1. getKPIs
 // ---------------------------------------------------------------------------
@@ -49,44 +70,54 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
   const today = todayISO();
 
   // --- recebido: sum of caixa_recebido from titles in date range ---
-  const recebidoQuery = supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('caixa_recebido')
-    .gte(col, dateStart)
-    .lte(col, dateEnd);
-  applyDimensionFilters(recebidoQuery, filters);
-  const { data: recebidoRows } = await recebidoQuery;
+  const recebidoRows = await fetchAllRows<{ caixa_recebido: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('caixa_recebido')
+      .gte(col, dateStart)
+      .lte(col, dateEnd)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
 
-  const recebido = (recebidoRows ?? []).reduce(
+  const recebido = recebidoRows.reduce(
     (sum, r) => sum + (Number(r.caixa_recebido) || 0),
     0,
   );
 
   // --- previsto: sum saldo_em_aberto where status in open statuses and date in range ---
-  const previstoQuery = supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('saldo_em_aberto')
-    .gte(col, dateStart)
-    .lte(col, dateEnd)
-    .in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
-  applyDimensionFilters(previstoQuery, filters);
-  const { data: previstoRows } = await previstoQuery;
+  const previstoRows = await fetchAllRows<{ saldo_em_aberto: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('saldo_em_aberto')
+      .gte(col, dateStart)
+      .lte(col, dateEnd)
+      .in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL'])
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
 
-  const previsto = (previstoRows ?? []).reduce(
+  const previsto = previstoRows.reduce(
     (sum, r) => sum + (Number(r.saldo_em_aberto) || 0),
     0,
   );
 
   // --- emAtraso: sum saldo_em_aberto where overdue ---
-  const atrasoQuery = supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('saldo_em_aberto')
-    .lt('data_vencimento', today)
-    .in('status_titulo', ['ATRASADO', 'PARCIAL', 'A VENCER']);
-  applyDimensionFilters(atrasoQuery, filters);
-  const { data: atrasoRows } = await atrasoQuery;
+  const atrasoRows = await fetchAllRows<{ saldo_em_aberto: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('saldo_em_aberto')
+      .lt('data_vencimento', today)
+      .gt('saldo_em_aberto', 0)
+      .in('status_titulo', ['ATRASADO', 'PARCIAL', 'A VENCER'])
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
 
-  const emAtraso = (atrasoRows ?? []).reduce(
+  const emAtraso = atrasoRows.reduce(
     (sum, r) => sum + (Number(r.saldo_em_aberto) || 0),
     0,
   );
@@ -96,48 +127,53 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
     previsto + emAtraso > 0 ? (emAtraso / (previsto + emAtraso)) * 100 : 0;
 
   // --- clientesInadimplentes: distinct cliente_id where overdue ---
-  const inadQuery = supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('cliente_id')
-    .lt('data_vencimento', today)
-    .gt('saldo_em_aberto', 0);
-  applyDimensionFilters(inadQuery, filters);
-  const { data: inadRows } = await inadQuery;
+  const inadRows = await fetchAllRows<{ cliente_id: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('cliente_id')
+      .lt('data_vencimento', today)
+      .gt('saldo_em_aberto', 0)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
 
   const clientesInadimplentes = new Set(
-    (inadRows ?? []).map((r) => r.cliente_id).filter(Boolean),
+    inadRows.map((r) => r.cliente_id).filter(Boolean),
   ).size;
 
   // --- churnRecebiveis: compare current vs previous period ---
-  // Current period clients who paid
-  const currentClientsQuery = supabaseAdmin
-    .from('fact_recebimento')
-    .select('titulo_id, fact_titulo_receber!inner(cliente_id)')
-    .gte('data_baixa', dateStart)
-    .lte('data_baixa', dateEnd)
-    .neq('tipo_baixa', 'CANCELADO');
-  const { data: currentPayments } = await currentClientsQuery;
+  const currentPayments = await fetchAllRows<any>((from, to) =>
+    supabaseAdmin
+      .from('fact_recebimento')
+      .select('titulo_id, fact_titulo_receber!inner(cliente_id)')
+      .gte('data_baixa', dateStart)
+      .lte('data_baixa', dateEnd)
+      .neq('tipo_baixa', 'CANCELADO')
+      .range(from, to),
+  );
 
   const currentClients = new Set(
-    (currentPayments ?? [])
+    currentPayments
       .map((r: any) => r.fact_titulo_receber?.cliente_id)
       .filter(Boolean),
   );
 
-  // Previous period
   const prevStart = toISODate(subMonths(new Date(dateStart), 1));
   const prevEnd = dateStart;
 
-  const prevClientsQuery = supabaseAdmin
-    .from('fact_recebimento')
-    .select('titulo_id, fact_titulo_receber!inner(cliente_id)')
-    .gte('data_baixa', prevStart)
-    .lt('data_baixa', prevEnd)
-    .neq('tipo_baixa', 'CANCELADO');
-  const { data: prevPayments } = await prevClientsQuery;
+  const prevPayments = await fetchAllRows<any>((from, to) =>
+    supabaseAdmin
+      .from('fact_recebimento')
+      .select('titulo_id, fact_titulo_receber!inner(cliente_id)')
+      .gte('data_baixa', prevStart)
+      .lt('data_baixa', prevEnd)
+      .neq('tipo_baixa', 'CANCELADO')
+      .range(from, to),
+  );
 
   const previousClients = new Set(
-    (prevPayments ?? [])
+    prevPayments
       .map((r: any) => r.fact_titulo_receber?.cliente_id)
       .filter(Boolean),
   );
@@ -168,21 +204,23 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
 // ---------------------------------------------------------------------------
 
 export async function getAgingBuckets(filters: DashboardFilters): Promise<AgingBucketData[]> {
-  const query = supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('saldo_em_aberto, data_vencimento')
-    .gt('saldo_em_aberto', 0)
-    .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")');
-  applyDimensionFilters(query, filters);
-  const { data: rows } = await query;
+  const rows = await fetchAllRows<{ saldo_em_aberto: number; data_vencimento: string }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('saldo_em_aberto, data_vencimento')
+      .gt('saldo_em_aberto', 0)
+      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
 
-  // Initialise bucket accumulators
   const bucketMap = new Map<string, { saldo: number; quantidade: number }>();
   for (const b of AGING_BUCKETS) {
     bucketMap.set(b, { saldo: 0, quantidade: 0 });
   }
 
-  for (const row of rows ?? []) {
+  for (const row of rows) {
     const dias = daysOverdueFromString(row.data_vencimento);
     const bucket = classifyAging(dias);
     const entry = bucketMap.get(bucket)!;
@@ -202,13 +240,16 @@ export async function getAgingBuckets(filters: DashboardFilters): Promise<AgingB
 // ---------------------------------------------------------------------------
 
 export async function getAgingByClient(filters: DashboardFilters): Promise<AgingClientData[]> {
-  const query = supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('cliente_id, saldo_em_aberto, data_vencimento, dim_cliente!inner(razao_social)')
-    .gt('saldo_em_aberto', 0)
-    .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")');
-  applyDimensionFilters(query, filters);
-  const { data: rows } = await query;
+  const rows = await fetchAllRows<any>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('cliente_id, saldo_em_aberto, data_vencimento, dim_cliente!inner(razao_social)')
+      .gt('saldo_em_aberto', 0)
+      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
 
   const clientMap = new Map<
     number,
@@ -220,7 +261,7 @@ export async function getAgingByClient(filters: DashboardFilters): Promise<Aging
     }
   >();
 
-  for (const row of (rows ?? []) as any[]) {
+  for (const row of rows) {
     const clienteId: number = row.cliente_id;
     const clienteNome: string = row.dim_cliente?.razao_social ?? 'Desconhecido';
     const saldo = Number(row.saldo_em_aberto) || 0;
@@ -277,33 +318,36 @@ export async function getTrends(filters: DashboardFilters): Promise<TrendPoint[]
   for (const monthDate of months) {
     const monthStart = toISODate(monthDate);
     const nextMonth = addMonths(monthDate, 1);
-    // Last day of this month is day before next month
     const monthEnd = toISODate(new Date(nextMonth.getTime() - 1));
 
-    // recebido: sum caixa_recebido grouped by month
-    const recQuery = supabaseAdmin
-      .from('fact_titulo_receber')
-      .select('caixa_recebido')
-      .gte('data_vencimento', monthStart)
-      .lte('data_vencimento', monthEnd);
-    applyDimensionFilters(recQuery, filters);
+    const recRows = await fetchAllRows<{ caixa_recebido: number }>((from, to) => {
+      const q = supabaseAdmin
+        .from('fact_titulo_receber')
+        .select('caixa_recebido')
+        .gte('data_vencimento', monthStart)
+        .lte('data_vencimento', monthEnd)
+        .range(from, to);
+      applyDimensionFilters(q, filters);
+      return q;
+    });
 
-    // previsto: sum saldo_em_aberto grouped by month
-    const prevQuery = supabaseAdmin
-      .from('fact_titulo_receber')
-      .select('saldo_em_aberto')
-      .gte('data_vencimento', monthStart)
-      .lte('data_vencimento', monthEnd)
-      .in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
-    applyDimensionFilters(prevQuery, filters);
+    const prevRows = await fetchAllRows<{ saldo_em_aberto: number }>((from, to) => {
+      const q = supabaseAdmin
+        .from('fact_titulo_receber')
+        .select('saldo_em_aberto')
+        .gte('data_vencimento', monthStart)
+        .lte('data_vencimento', monthEnd)
+        .in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL'])
+        .range(from, to);
+      applyDimensionFilters(q, filters);
+      return q;
+    });
 
-    const [{ data: recRows }, { data: prevRows }] = await Promise.all([recQuery, prevQuery]);
-
-    const recebido = (recRows ?? []).reduce(
+    const recebido = recRows.reduce(
       (sum, r) => sum + (Number(r.caixa_recebido) || 0),
       0,
     );
-    const previsto = (prevRows ?? []).reduce(
+    const previsto = prevRows.reduce(
       (sum, r) => sum + (Number(r.saldo_em_aberto) || 0),
       0,
     );
@@ -335,18 +379,20 @@ export async function getHorizons(filters: DashboardFilters): Promise<HorizonDat
     const rangeStart = toISODate(range.start);
     const rangeEnd = toISODate(range.end);
 
-    const query = supabaseAdmin
-      .from('fact_titulo_receber')
-      .select('saldo_em_aberto')
-      .gte(col, rangeStart)
-      .lte(col, rangeEnd)
-      .gt('saldo_em_aberto', 0)
-      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")');
-    applyDimensionFilters(query, filters);
+    const rows = await fetchAllRows<{ saldo_em_aberto: number }>((from, to) => {
+      const q = supabaseAdmin
+        .from('fact_titulo_receber')
+        .select('saldo_em_aberto')
+        .gte(col, rangeStart)
+        .lte(col, rangeEnd)
+        .gt('saldo_em_aberto', 0)
+        .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+        .range(from, to);
+      applyDimensionFilters(q, filters);
+      return q;
+    });
 
-    const { data: rows } = await query;
-
-    const previsto = (rows ?? []).reduce(
+    const previsto = rows.reduce(
       (sum, r) => sum + (Number(r.saldo_em_aberto) || 0),
       0,
     );
@@ -372,9 +418,7 @@ export async function getTitulos(
 ): Promise<PaginatedResult<TituloRow>> {
   const { dateStart, dateEnd, mode } = filters;
   const col = dateColumn(mode);
-  const today = todayISO();
 
-  // Build base query selecting needed fields and joins
   let query = supabaseAdmin
     .from('fact_titulo_receber')
     .select(
@@ -389,7 +433,7 @@ export async function getTitulos(
       caixa_recebido,
       desconto_concedido,
       status_titulo,
-      dim_cliente!inner(id, razao_social, cnpj_cpf),
+      dim_cliente(id, razao_social, cnpj_cpf),
       dim_conta_corrente(descricao),
       dim_vendedor(nome),
       dim_departamento(descricao)
@@ -403,16 +447,13 @@ export async function getTitulos(
   if (filters.statusTitulo && filters.statusTitulo.length > 0) {
     query = query.in('status_titulo', filters.statusTitulo);
   } else {
-    // Default: only open titles
     query = query.in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
   }
 
   applyDimensionFilters(query, filters);
 
-  // Sort by data_vencimento ascending (most overdue first)
   query = query.order('data_vencimento', { ascending: true });
 
-  // Pagination
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
   query = query.range(from, to);
@@ -489,7 +530,6 @@ export async function getRecebimentos(
     .gte('data_baixa', dateStart)
     .lte('data_baixa', dateEnd);
 
-  // Dimension filters applied via the joined titulo
   if (filters.contaCorrenteId) {
     query = query.eq('fact_titulo_receber.conta_corrente_id', filters.contaCorrenteId);
   }
@@ -529,38 +569,68 @@ export async function getRecebimentos(
 }
 
 // ---------------------------------------------------------------------------
-// 8. getDimensionOptions
+// 8. getDimensionOptions - Only return dimensions that have associated titles
 // ---------------------------------------------------------------------------
 
 export async function getDimensionOptions(): Promise<DimensionOptions> {
+  // Fetch distinct FK IDs from fact_titulo_receber to know which dimensions are actually used
+  const [ccIdsResult, deptIdsResult, vendIdsResult] = await Promise.all([
+    supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('conta_corrente_id')
+      .not('conta_corrente_id', 'is', null)
+      .gt('saldo_em_aberto', 0),
+    supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('departamento_id')
+      .not('departamento_id', 'is', null)
+      .gt('saldo_em_aberto', 0),
+    supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('vendedor_id')
+      .not('vendedor_id', 'is', null)
+      .gt('saldo_em_aberto', 0),
+  ]);
+
+  const ccIds = [...new Set((ccIdsResult.data ?? []).map((r) => r.conta_corrente_id))];
+  const deptIds = [...new Set((deptIdsResult.data ?? []).map((r) => r.departamento_id))];
+  const vendIds = [...new Set((vendIdsResult.data ?? []).map((r) => r.vendedor_id))];
+
+  // Fetch dimension details only for IDs that exist in titles
   const [ccResult, deptResult, vendResult] = await Promise.all([
-    supabaseAdmin
-      .from('dim_conta_corrente')
-      .select('id, descricao')
-      .eq('ativo', true)
-      .order('descricao'),
-    supabaseAdmin
-      .from('dim_departamento')
-      .select('id, descricao')
-      .eq('ativo', true)
-      .order('descricao'),
-    supabaseAdmin
-      .from('dim_vendedor')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome'),
+    ccIds.length > 0
+      ? supabaseAdmin
+          .from('dim_conta_corrente')
+          .select('id, descricao')
+          .in('id', ccIds)
+          .order('descricao')
+      : { data: [] },
+    deptIds.length > 0
+      ? supabaseAdmin
+          .from('dim_departamento')
+          .select('id, descricao')
+          .in('id', deptIds)
+          .order('descricao')
+      : { data: [] },
+    vendIds.length > 0
+      ? supabaseAdmin
+          .from('dim_vendedor')
+          .select('id, nome')
+          .in('id', vendIds)
+          .order('nome')
+      : { data: [] },
   ]);
 
   return {
-    contasCorrentes: (ccResult.data ?? []).map((c) => ({
+    contasCorrentes: ((ccResult as any).data ?? []).map((c: any) => ({
       id: c.id,
       label: c.descricao,
     })),
-    departamentos: (deptResult.data ?? []).map((d) => ({
+    departamentos: ((deptResult as any).data ?? []).map((d: any) => ({
       id: d.id,
       label: d.descricao,
     })),
-    vendedores: (vendResult.data ?? []).map((v) => ({
+    vendedores: ((vendResult as any).data ?? []).map((v: any) => ({
       id: v.id,
       label: v.nome,
     })),
