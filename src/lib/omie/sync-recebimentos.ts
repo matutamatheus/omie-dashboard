@@ -34,12 +34,22 @@ interface MFMovimento {
 // ---------------------------------------------------------------------------
 
 async function buildTituloLookup(): Promise<Map<number, number>> {
-  const { data, error } = await supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('id, omie_codigo_titulo');
-  if (error) throw new Error(`Lookup fact_titulo_receber: ${error.message}`);
   const map = new Map<number, number>();
-  for (const row of data ?? []) map.set(row.omie_codigo_titulo, row.id);
+  let from = 0;
+  const PAGE = 5000;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('id, omie_codigo_titulo')
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`Lookup fact_titulo_receber: ${error.message}`);
+    if (!data || data.length === 0) break;
+    for (const row of data) map.set(row.omie_codigo_titulo, row.id);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+
   return map;
 }
 

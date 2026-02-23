@@ -68,7 +68,7 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
     .select('saldo_em_aberto')
     .gte(col, dateStart)
     .lte(col, dateEnd)
-    .in('status_titulo', ['RECEBER', 'ATRASADO', 'PARCIAL']);
+    .in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
   applyDimensionFilters(previstoQuery, filters);
   const { data: previstoRows } = await previstoQuery;
 
@@ -82,7 +82,7 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
     .from('fact_titulo_receber')
     .select('saldo_em_aberto')
     .lt('data_vencimento', today)
-    .in('status_titulo', ['ATRASADO', 'PARCIAL']);
+    .in('status_titulo', ['ATRASADO', 'PARCIAL', 'A VENCER']);
   applyDimensionFilters(atrasoQuery, filters);
   const { data: atrasoRows } = await atrasoQuery;
 
@@ -294,7 +294,7 @@ export async function getTrends(filters: DashboardFilters): Promise<TrendPoint[]
       .select('saldo_em_aberto')
       .gte('data_vencimento', monthStart)
       .lte('data_vencimento', monthEnd)
-      .in('status_titulo', ['RECEBER', 'ATRASADO', 'PARCIAL']);
+      .in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
     applyDimensionFilters(prevQuery, filters);
 
     const [{ data: recRows }, { data: prevRows }] = await Promise.all([recQuery, prevQuery]);
@@ -404,7 +404,7 @@ export async function getTitulos(
     query = query.in('status_titulo', filters.statusTitulo);
   } else {
     // Default: only open titles
-    query = query.in('status_titulo', ['RECEBER', 'ATRASADO', 'PARCIAL']);
+    query = query.in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
   }
 
   applyDimensionFilters(query, filters);

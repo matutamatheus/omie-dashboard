@@ -7,18 +7,25 @@ import { supabaseAdmin } from '../supabase/admin';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a lookup map  omie_codigo -> id  for a given dimension table. */
+/** Build a lookup map  omie_codigo -> id  for a given dimension table. Paginates to handle >1000 rows. */
 async function buildLookup(table: string): Promise<Map<number, number>> {
-  const { data, error } = await supabaseAdmin
-    .from(table)
-    .select('id, omie_codigo');
-
-  if (error) throw new Error(`Lookup ${table}: ${error.message}`);
-
   const map = new Map<number, number>();
-  for (const row of data ?? []) {
-    map.set(row.omie_codigo, row.id);
+  let from = 0;
+  const PAGE = 5000;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select('id, omie_codigo')
+      .range(from, from + PAGE - 1);
+
+    if (error) throw new Error(`Lookup ${table}: ${error.message}`);
+    if (!data || data.length === 0) break;
+    for (const row of data) map.set(row.omie_codigo, row.id);
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
+
   return map;
 }
 
