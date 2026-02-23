@@ -59,9 +59,10 @@ export interface DimensionOptions {
 }
 
 export interface DailyReceivable {
-  date: string;       // dd/MM/yyyy
+  date: string;       // dd/MM
   dateISO: string;    // yyyy-MM-dd
-  saldo: number;
+  saldo: number;      // a receber (vencimentos)
+  recebido: number;   // valor recebido (baixas)
 }
 
 export interface PaginatedResult<T> {

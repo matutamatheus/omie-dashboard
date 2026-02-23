@@ -156,7 +156,8 @@ export async function getDailyReceivables(
   const start = rangeStart || todayISO();
   const end = rangeEnd || toISODate(new Date(Date.now() + 180 * 24 * 60 * 60 * 1000));
 
-  const rows = await fetchAllRows<{ data_vencimento: string; saldo_em_aberto: number }>((from, to) => {
+  // Vencimentos (a receber) por dia
+  const tituloRows = await fetchAllRows<{ data_vencimento: string; saldo_em_aberto: number }>((from, to) => {
     const q = supabaseAdmin
       .from('fact_titulo_receber')
       .select('data_vencimento, saldo_em_aberto')
@@ -170,18 +171,40 @@ export async function getDailyReceivables(
     return q;
   });
 
-  const byDay = new Map<string, number>();
-  for (const r of rows) {
-    const dateISO = r.data_vencimento;
-    byDay.set(dateISO, (byDay.get(dateISO) || 0) + (Number(r.saldo_em_aberto) || 0));
+  // Recebimentos (baixas) por dia
+  const recebRows = await fetchAllRows<{ data_baixa: string; valor_baixado: number; valor_juros: number; valor_multa: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_recebimento')
+      .select('data_baixa, valor_baixado, valor_juros, valor_multa')
+      .gte('data_baixa', start)
+      .lte('data_baixa', end)
+      .order('data_baixa', { ascending: true })
+      .range(from, to);
+    return q;
+  });
+
+  const saldoByDay = new Map<string, number>();
+  for (const r of tituloRows) {
+    const d = r.data_vencimento;
+    saldoByDay.set(d, (saldoByDay.get(d) || 0) + (Number(r.saldo_em_aberto) || 0));
   }
 
-  return Array.from(byDay.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([dateISO, saldo]) => ({
+  const recebByDay = new Map<string, number>();
+  for (const r of recebRows) {
+    const d = r.data_baixa;
+    const val = (Number(r.valor_baixado) || 0) + (Number(r.valor_juros) || 0) + (Number(r.valor_multa) || 0);
+    recebByDay.set(d, (recebByDay.get(d) || 0) + val);
+  }
+
+  const allDates = new Set([...saldoByDay.keys(), ...recebByDay.keys()]);
+
+  return Array.from(allDates)
+    .sort((a, b) => a.localeCompare(b))
+    .map((dateISO) => ({
       date: format(new Date(dateISO), 'dd/MM'),
       dateISO,
-      saldo,
+      saldo: saldoByDay.get(dateISO) || 0,
+      recebido: recebByDay.get(dateISO) || 0,
     }));
 }
 

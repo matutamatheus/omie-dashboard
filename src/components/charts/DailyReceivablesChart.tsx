@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency, formatCompactCurrency } from '@/lib/utils/formatters';
 import { buildFilterParams } from '@/lib/utils/filter-params';
@@ -59,7 +59,8 @@ export function DailyReceivablesChart({ filters }: Props) {
       .finally(() => setLoading(false));
   }, [filters, selectedRange]);
 
-  const total = useMemo(() => data.reduce((sum, d) => sum + d.saldo, 0), [data]);
+  const totalSaldo = useMemo(() => data.reduce((sum, d) => sum + d.saldo, 0), [data]);
+  const totalRecebido = useMemo(() => data.reduce((sum, d) => sum + d.recebido, 0), [data]);
 
   const todayLabel = `${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
@@ -72,8 +73,9 @@ export function DailyReceivablesChart({ filters }: Props) {
           </h3>
           {!loading && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Total no período: <span className="font-semibold text-gray-800 dark:text-white">{formatCompactCurrency(total)}</span>
-              {' '}({data.length} dias com vencimento)
+              A receber: <span className="font-semibold text-blue-600 dark:text-blue-400">{formatCompactCurrency(totalSaldo)}</span>
+              {' · '}Recebido: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCompactCurrency(totalRecebido)}</span>
+              {' · '}{data.length} dias
             </p>
           )}
         </div>
@@ -116,8 +118,11 @@ export function DailyReceivablesChart({ filters }: Props) {
               tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}K`}
             />
             <Tooltip
-              formatter={(value) => [formatCurrency(Number(value || 0)), 'Saldo']}
-              labelFormatter={(label) => `Vencimento: ${label}`}
+              formatter={(value: any, name: any) => [
+                formatCurrency(Number(value || 0)),
+                name === 'recebido' ? 'Recebido' : 'A Receber',
+              ]}
+              labelFormatter={(label) => `Data: ${label}`}
               contentStyle={{
                 backgroundColor: '#1f2937',
                 border: '1px solid #374151',
@@ -125,6 +130,10 @@ export function DailyReceivablesChart({ filters }: Props) {
                 color: '#f3f4f6',
                 fontSize: 12,
               }}
+            />
+            <Legend
+              formatter={(value) => (value === 'recebido' ? 'Recebido' : 'A Receber')}
+              wrapperStyle={{ fontSize: 11 }}
             />
             {(rangeKey === 'all' || rangeKey.includes('past')) && (
               <ReferenceLine
@@ -134,6 +143,7 @@ export function DailyReceivablesChart({ filters }: Props) {
                 label={{ value: 'Hoje', position: 'top', fontSize: 10, fill: '#ef4444' }}
               />
             )}
+            <Bar dataKey="recebido" radius={[2, 2, 0, 0]} fill="#10b981" />
             <Bar dataKey="saldo" radius={[2, 2, 0, 0]} fill="#3b82f6" />
           </BarChart>
         </ResponsiveContainer>
