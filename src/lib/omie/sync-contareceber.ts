@@ -11,7 +11,7 @@ import { supabaseAdmin } from '../supabase/admin';
 async function buildLookup(table: string): Promise<Map<number, number>> {
   const map = new Map<number, number>();
   let from = 0;
-  const PAGE = 5000;
+  const PAGE = 1000;
 
   while (true) {
     const { data, error } = await supabaseAdmin
