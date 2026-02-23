@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { runFullSync } from '@/lib/omie/sync-orchestrator';
+
+export const maxDuration = 300; // 5 min timeout for sync
 
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization');
@@ -10,6 +13,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Mock mode - sync skipped' });
   }
 
-  // TODO: implement real sync orchestrator
-  return NextResponse.json({ success: true, message: 'Sync not yet implemented' });
+  try {
+    const result = await runFullSync();
+    return NextResponse.json({
+      success: result.status === 'success',
+      ...result,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[sync] Fatal error:', message);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
 }
