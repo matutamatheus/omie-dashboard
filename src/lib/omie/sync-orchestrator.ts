@@ -137,8 +137,7 @@ export async function runFullSync(): Promise<SyncRunResult> {
   // -----------------------------------------------------------------------
   try {
     console.log('[sync-orchestrator] Step 2/4: Syncing contas a receber...');
-    const cursor = await getLastCursor('fact_titulo_receber');
-    contaReceberResult = await syncContaReceber(cursor);
+    contaReceberResult = await syncContaReceber();
     totalFetched += contaReceberResult.fetched;
     totalUpserted += contaReceberResult.upserted;
   } catch (err) {
