@@ -1,4 +1,4 @@
-import { omieListAll } from './client';
+import { omieListPages, type ListPagesConfig } from './client';
 import { OMIE_ENDPOINTS } from './endpoints';
 import { supabaseAdmin } from '../supabase/admin';
 
@@ -68,17 +68,36 @@ function parseOmieDate(raw: string | undefined | null): string | null {
 export interface SyncRecebimentosResult {
   fetched: number;
   upserted: number;
+  totalPages: number;
+  lastPage: number;
+  done: boolean;
 }
 
-export async function syncRecebimentos(): Promise<SyncRecebimentosResult> {
-  const raw = await omieListAll<MFMovimento>({
-    endpoint: OMIE_ENDPOINTS.movimentosFinanceiros,
-    call: 'ListarMovimentos',
-    params: { cNatureza: 'R' },
-    dataKey: 'movimentos',
-    pageSize: 200,
-    paginationStyle: 'mf',
-  });
+const MF_CONFIG: ListPagesConfig = {
+  endpoint: OMIE_ENDPOINTS.movimentosFinanceiros,
+  call: 'ListarMovimentos',
+  params: { cNatureza: 'R' },
+  dataKey: 'movimentos',
+  pageSize: 200,
+  paginationStyle: 'mf',
+};
+
+/**
+ * Sync recebimentos in page chunks to avoid serverless timeout.
+ * @param fromPage Starting page (1-based)
+ * @param toPage   Ending page (inclusive). If not set, fetches 20 pages.
+ */
+export async function syncRecebimentos(
+  fromPage = 1,
+  toPage?: number,
+): Promise<SyncRecebimentosResult> {
+  const endPage = toPage ?? fromPage + 19; // 20 pages at a time = ~4000 records
+
+  const { records: raw, totalPages, lastPage } = await omieListPages<MFMovimento>(
+    MF_CONFIG,
+    fromPage,
+    endPage,
+  );
 
   // Filter movements with actual payments
   const recMovs = raw.filter((m) =>
@@ -88,7 +107,7 @@ export async function syncRecebimentos(): Promise<SyncRecebimentosResult> {
   );
 
   if (recMovs.length === 0) {
-    return { fetched: raw.length, upserted: 0 };
+    return { fetched: raw.length, upserted: 0, totalPages, lastPage, done: lastPage >= totalPages };
   }
 
   const [tituloMap, ccMap] = await Promise.all([
@@ -127,5 +146,5 @@ export async function syncRecebimentos(): Promise<SyncRecebimentosResult> {
     upserted += count ?? chunk.length;
   }
 
-  return { fetched: raw.length, upserted };
+  return { fetched: raw.length, upserted, totalPages, lastPage, done: lastPage >= totalPages };
 }

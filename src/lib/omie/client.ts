@@ -70,17 +70,33 @@ export async function omieCall<T>(config: OmieCallParams): Promise<T> {
   throw lastError || new Error('Max retries exceeded');
 }
 
-export async function omieListAll<TRecord>(config: {
+export interface ListPagesConfig {
   endpoint: string;
   call: string;
   params: Record<string, unknown>;
   dataKey: string;
   pageSize?: number;
   paginationStyle?: 'default' | 'mf';
-}): Promise<TRecord[]> {
+}
+
+export interface ListPagesResult<TRecord> {
+  records: TRecord[];
+  totalPages: number;
+  lastPage: number;
+}
+
+/**
+ * Fetch a range of pages from a paginated Omie endpoint.
+ * If `toPage` is not provided, fetches all pages from `fromPage`.
+ */
+export async function omieListPages<TRecord>(
+  config: ListPagesConfig,
+  fromPage = 1,
+  toPage?: number,
+): Promise<ListPagesResult<TRecord>> {
   const { endpoint, call, params, dataKey, pageSize = 100, paginationStyle = 'default' } = config;
   const all: TRecord[] = [];
-  let page = 1;
+  let page = fromPage;
   let totalPages = 1;
 
   const pageField = paginationStyle === 'mf' ? 'nPagina' : 'pagina';
@@ -98,7 +114,12 @@ export async function omieListAll<TRecord>(config: {
     all.push(...records);
     totalPages = (result[totalField] as number) || 1;
     page++;
-  } while (page <= totalPages);
+  } while (page <= totalPages && (!toPage || page <= toPage));
 
-  return all;
+  return { records: all, totalPages, lastPage: page - 1 };
+}
+
+export async function omieListAll<TRecord>(config: ListPagesConfig): Promise<TRecord[]> {
+  const { records } = await omieListPages<TRecord>(config);
+  return records;
 }

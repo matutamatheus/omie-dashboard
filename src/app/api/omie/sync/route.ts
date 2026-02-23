@@ -1,11 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { syncAllDimensions } from '@/lib/omie/sync-dimensions';
+import {
+  syncClientes,
+  syncContasCorrentes,
+  syncDepartamentos,
+  syncCategorias,
+  syncVendedores,
+} from '@/lib/omie/sync-dimensions';
 import { syncContaReceber } from '@/lib/omie/sync-contareceber';
 import { syncRecebimentos } from '@/lib/omie/sync-recebimentos';
 
 export const maxDuration = 60;
 
-type StepName = 'dimensions' | 'titulos' | 'recebimentos' | 'all';
+const VALID_STEPS = [
+  'clientes',
+  'contas_correntes',
+  'departamentos',
+  'categorias',
+  'vendedores',
+  'titulos',
+  'recebimentos',
+] as const;
+
+type StepName = (typeof VALID_STEPS)[number];
 
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization');
@@ -17,33 +33,55 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Mock mode - sync skipped' });
   }
 
-  const step = (request.nextUrl.searchParams.get('step') || 'all') as StepName;
+  const step = request.nextUrl.searchParams.get('step') as StepName | null;
+
+  if (!step || !VALID_STEPS.includes(step)) {
+    return NextResponse.json({
+      error: 'Missing or invalid step parameter',
+      validSteps: VALID_STEPS,
+    }, { status: 400 });
+  }
 
   try {
-    if (step === 'dimensions' || step === 'all') {
-      const dims = await syncAllDimensions();
-      if (step === 'dimensions') {
-        return NextResponse.json({ success: true, step: 'dimensions', dimensions: dims });
+    let result: unknown;
+
+    switch (step) {
+      case 'clientes':
+        result = { entity: 'dim_cliente', records: await syncClientes() };
+        break;
+      case 'contas_correntes':
+        result = { entity: 'dim_conta_corrente', records: await syncContasCorrentes() };
+        break;
+      case 'departamentos':
+        result = { entity: 'dim_departamento', records: await syncDepartamentos() };
+        break;
+      case 'categorias':
+        result = { entity: 'dim_categoria', records: await syncCategorias() };
+        break;
+      case 'vendedores':
+        result = { entity: 'dim_vendedor', records: await syncVendedores() };
+        break;
+      case 'titulos':
+        result = await syncContaReceber();
+        break;
+      case 'recebimentos': {
+        const fromPage = parseInt(request.nextUrl.searchParams.get('fromPage') || '1', 10);
+        const toPage = request.nextUrl.searchParams.get('toPage')
+          ? parseInt(request.nextUrl.searchParams.get('toPage')!, 10)
+          : undefined;
+        result = await syncRecebimentos(fromPage, toPage);
+        break;
       }
     }
 
-    if (step === 'titulos' || step === 'all') {
-      const titulos = await syncContaReceber();
-      if (step === 'titulos') {
-        return NextResponse.json({ success: true, step: 'titulos', ...titulos });
-      }
-    }
-
-    if (step === 'recebimentos') {
-      const receb = await syncRecebimentos();
-      return NextResponse.json({ success: true, step: 'recebimentos', ...receb });
-    }
-
-    // 'all' skips recebimentos (too large for serverless timeout)
-    return NextResponse.json({ success: true, step: 'all', message: 'Dimensions + titles synced. Run step=recebimentos separately.' });
+    return NextResponse.json({
+      success: true,
+      step,
+      ...(result && typeof result === 'object' ? result : { result }),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[sync] Error:', message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    console.error(`[sync] Error in step=${step}:`, message);
+    return NextResponse.json({ success: false, step, error: message }, { status: 500 });
   }
 }
