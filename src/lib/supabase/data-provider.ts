@@ -84,11 +84,11 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
     0,
   );
 
-  // vencido: titulos com vencimento < hoje e saldo > 0
-  const vencidoRows = await fetchAllRows<{ saldo_em_aberto: number }>((from, to) => {
+  // vencido: titulos com vencimento < hoje e saldo > 0 (com cliente_id para contar inadimplentes)
+  const vencidoRows = await fetchAllRows<{ saldo_em_aberto: number; cliente_id: number }>((from, to) => {
     const q = supabaseAdmin
       .from('fact_titulo_receber')
-      .select('saldo_em_aberto')
+      .select('saldo_em_aberto, cliente_id')
       .lt('data_vencimento', today)
       .gt('saldo_em_aberto', 0)
       .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
@@ -102,7 +102,11 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
     0,
   );
 
-  return { recebido, aReceber, vencido };
+  const titulosVencidos = vencidoRows.length;
+  const clientesInadimplentes = new Set(vencidoRows.map((r) => r.cliente_id)).size;
+  const taxaInadimplencia = aReceber > 0 ? (vencido / aReceber) * 100 : 0;
+
+  return { recebido, aReceber, vencido, taxaInadimplencia, clientesInadimplentes, titulosVencidos };
 }
 
 // ---------------------------------------------------------------------------

@@ -4,23 +4,27 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { formatCompactCurrency } from '@/lib/utils/formatters';
 import { buildFilterParams } from '@/lib/utils/filter-params';
-import { DollarSign, TrendingUp, AlertTriangle } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertTriangle, Percent, Users, FileWarning } from 'lucide-react';
 import type { KPIData, DashboardFilters } from '@/types/dashboard';
 import type { LucideIcon } from 'lucide-react';
 
 interface KPICardProps {
   title: string;
   value: string;
+  subtitle?: string;
   icon: LucideIcon;
   color: string;
   loading?: boolean;
 }
 
-function KPICard({ title, value, icon: Icon, color, loading }: KPICardProps) {
+function KPICard({ title, value, subtitle, icon: Icon, color, loading }: KPICardProps) {
   const colorClasses: Record<string, { bg: string; icon: string }> = {
     green: { bg: 'bg-green-100 dark:bg-green-900/30', icon: 'text-green-600 dark:text-green-400' },
     blue: { bg: 'bg-blue-100 dark:bg-blue-900/30', icon: 'text-blue-600 dark:text-blue-400' },
     red: { bg: 'bg-red-100 dark:bg-red-900/30', icon: 'text-red-600 dark:text-red-400' },
+    amber: { bg: 'bg-amber-100 dark:bg-amber-900/30', icon: 'text-amber-600 dark:text-amber-400' },
+    purple: { bg: 'bg-purple-100 dark:bg-purple-900/30', icon: 'text-purple-600 dark:text-purple-400' },
+    orange: { bg: 'bg-orange-100 dark:bg-orange-900/30', icon: 'text-orange-600 dark:text-orange-400' },
   };
 
   const c = colorClasses[color] || colorClasses.blue;
@@ -35,9 +39,16 @@ function KPICard({ title, value, icon: Icon, color, loading }: KPICardProps) {
           {loading ? (
             <div className="h-7 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
           ) : (
-            <p className="text-xl font-bold text-gray-900 dark:text-white truncate">
-              {value}
-            </p>
+            <>
+              <p className="text-xl font-bold text-gray-900 dark:text-white truncate">
+                {value}
+              </p>
+              {subtitle && (
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                  {subtitle}
+                </p>
+              )}
+            </>
           )}
         </div>
         <div className={cn('p-2.5 rounded-lg flex-shrink-0', c.bg)}>
@@ -68,13 +79,52 @@ export function KPICards({ filters }: KPICardsProps) {
   }, [filters]);
 
   const kpis = [
-    { title: 'Recebido no Período', value: data ? formatCompactCurrency(data.recebido) : '', icon: DollarSign, color: 'green' },
-    { title: 'A Receber', value: data ? formatCompactCurrency(data.aReceber) : '', icon: TrendingUp, color: 'blue' },
-    { title: 'Vencido', value: data ? formatCompactCurrency(data.vencido) : '', icon: AlertTriangle, color: 'red' },
+    {
+      title: 'Recebido no Periodo',
+      value: data ? formatCompactCurrency(data.recebido) : '',
+      subtitle: 'Entrada de caixa no periodo',
+      icon: DollarSign,
+      color: 'green',
+    },
+    {
+      title: 'A Receber',
+      value: data ? formatCompactCurrency(data.aReceber) : '',
+      subtitle: 'Saldo total em aberto',
+      icon: TrendingUp,
+      color: 'blue',
+    },
+    {
+      title: 'Vencido',
+      value: data ? formatCompactCurrency(data.vencido) : '',
+      subtitle: data ? `${data.titulosVencidos} titulo${data.titulosVencidos !== 1 ? 's' : ''} em atraso` : '',
+      icon: AlertTriangle,
+      color: 'red',
+    },
+    {
+      title: 'Taxa de Inadimplencia',
+      value: data ? `${data.taxaInadimplencia.toFixed(1)}%` : '',
+      subtitle: 'Vencido / Total a receber',
+      icon: Percent,
+      color: 'amber',
+    },
+    {
+      title: 'Clientes Inadimplentes',
+      value: data ? String(data.clientesInadimplentes) : '',
+      subtitle: 'Com titulos vencidos',
+      icon: Users,
+      color: 'purple',
+    },
+    {
+      title: 'Titulos Vencidos',
+      value: data ? String(data.titulosVencidos) : '',
+      subtitle: 'Documentos em atraso',
+      icon: FileWarning,
+      color: 'orange',
+    },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {kpis.map((kpi) => (
         <KPICard key={kpi.title} {...kpi} loading={loading} />
       ))}

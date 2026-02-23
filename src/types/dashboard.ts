@@ -14,6 +14,9 @@ export interface KPIData {
   recebido: number;
   aReceber: number;
   vencido: number;
+  taxaInadimplencia: number;   // % vencido sobre total a receber
+  clientesInadimplentes: number; // qtd de clientes com títulos vencidos
+  titulosVencidos: number;     // qtd de títulos vencidos
 }
 
 export interface HorizonData {
