@@ -29,12 +29,23 @@ export async function recalcTituloMetrics(): Promise<{ updated: number }> {
  * Fallback: manually query recebimentos and update titulos in JS.
  */
 async function recalcManual(): Promise<{ updated: number }> {
-  // Get aggregated recebimento data per titulo
-  const { data: recebimentos, error: recErr } = await supabaseAdmin
-    .from('fact_recebimento')
-    .select('omie_codigo_lancamento, valor_baixado, valor_desconto, valor_juros, valor_multa');
+  // Get all recebimento data - paginate since Supabase has 1000 row default limit
+  const recebimentos: { omie_codigo_lancamento: number; valor_baixado: number; valor_desconto: number; valor_juros: number; valor_multa: number }[] = [];
+  let from = 0;
+  const PAGE = 5000;
 
-  if (recErr) throw new Error(`Query fact_recebimento: ${recErr.message}`);
+  while (true) {
+    const { data, error: recErr } = await supabaseAdmin
+      .from('fact_recebimento')
+      .select('omie_codigo_lancamento, valor_baixado, valor_desconto, valor_juros, valor_multa')
+      .range(from, from + PAGE - 1);
+
+    if (recErr) throw new Error(`Query fact_recebimento: ${recErr.message}`);
+    if (!data || data.length === 0) break;
+    recebimentos.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
   // Aggregate by titulo omie_codigo (omie_codigo_lancamento = titulo's omie_codigo)
   const tituloAgg = new Map<number, {
@@ -64,12 +75,22 @@ async function recalcManual(): Promise<{ updated: number }> {
     }
   }
 
-  // Get all titulos to calculate saldo
-  const { data: titulos, error: titErr } = await supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('id, omie_codigo_titulo, valor_documento');
+  // Get all titulos - paginate
+  const titulos: { id: number; omie_codigo_titulo: number; valor_documento: number }[] = [];
+  from = 0;
 
-  if (titErr) throw new Error(`Query fact_titulo_receber: ${titErr.message}`);
+  while (true) {
+    const { data, error: titErr } = await supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('id, omie_codigo_titulo, valor_documento')
+      .range(from, from + PAGE - 1);
+
+    if (titErr) throw new Error(`Query fact_titulo_receber: ${titErr.message}`);
+    if (!data || data.length === 0) break;
+    titulos.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
 
   let updated = 0;
   const CHUNK = 100;
