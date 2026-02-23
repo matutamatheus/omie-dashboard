@@ -152,8 +152,7 @@ export async function runFullSync(): Promise<SyncRunResult> {
   // -----------------------------------------------------------------------
   try {
     console.log('[sync-orchestrator] Step 3/4: Syncing recebimentos...');
-    const cursor = await getLastCursor('fact_recebimento');
-    recebimentosResult = await syncRecebimentos(cursor);
+    recebimentosResult = await syncRecebimentos();
     totalFetched += recebimentosResult.fetched;
     totalUpserted += recebimentosResult.upserted;
   } catch (err) {
