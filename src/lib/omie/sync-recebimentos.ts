@@ -84,14 +84,13 @@ const MF_CONFIG: ListPagesConfig = {
 
 /**
  * Sync recebimentos in page chunks to avoid serverless timeout.
- * @param fromPage Starting page (1-based)
- * @param toPage   Ending page (inclusive). If not set, fetches 20 pages.
+ * Multiple movements for the same titulo are aggregated (summed).
  */
 export async function syncRecebimentos(
   fromPage = 1,
   toPage?: number,
 ): Promise<SyncRecebimentosResult> {
-  const endPage = toPage ?? fromPage + 19; // 20 pages at a time = ~4000 records
+  const endPage = toPage ?? fromPage + 19;
 
   const { records: raw, totalPages, lastPage } = await omieListPages<MFMovimento>(
     MF_CONFIG,
@@ -115,25 +114,69 @@ export async function syncRecebimentos(
     buildContaCorrenteLookup(),
   ]);
 
-  const rows = recMovs
-    .map((mov) => {
-      const d = mov.detalhes;
-      const r = mov.resumo;
-      return {
-        omie_codigo_lancamento: d.nCodTitulo ?? 0,
-        titulo_id: d.nCodTitulo ? tituloMap.get(d.nCodTitulo) ?? null : null,
-        conta_corrente_id: d.nCodCC ? ccMap.get(d.nCodCC) ?? null : null,
-        data_baixa: parseOmieDate(d.dDtPagamento) || parseOmieDate(d.dDtVenc),
-        valor_baixado: r.nValPago ?? 0,
-        valor_desconto: r.nDesconto ?? 0,
-        valor_juros: r.nJuros ?? 0,
-        valor_multa: r.nMulta ?? 0,
-        tipo_baixa: r.cLiquidado === 'S' ? 'BAIXA' : 'PARCIAL',
-        liquidado: r.cLiquidado === 'S',
-        updated_at: new Date().toISOString(),
-      };
-    })
-    .filter((r) => r.data_baixa && r.omie_codigo_lancamento > 0);
+  // Aggregate movements by titulo: a titulo can have multiple payments
+  // We sum up values and keep the latest payment date
+  const aggregated = new Map<number, {
+    tituloOmie: number;
+    tituloId: number | null;
+    contaCorrenteId: number | null;
+    dataBaixa: string | null;
+    valorBaixado: number;
+    valorDesconto: number;
+    valorJuros: number;
+    valorMulta: number;
+    liquidado: boolean;
+  }>();
+
+  for (const mov of recMovs) {
+    const d = mov.detalhes;
+    const r = mov.resumo;
+    const tituloOmie = d.nCodTitulo!;
+    const existing = aggregated.get(tituloOmie);
+    const dataBaixa = parseOmieDate(d.dDtPagamento) || parseOmieDate(d.dDtVenc);
+    const liquidado = r.cLiquidado === 'S';
+
+    if (existing) {
+      existing.valorBaixado += r.nValPago ?? 0;
+      existing.valorDesconto += r.nDesconto ?? 0;
+      existing.valorJuros += r.nJuros ?? 0;
+      existing.valorMulta += r.nMulta ?? 0;
+      // Keep latest date
+      if (dataBaixa && (!existing.dataBaixa || dataBaixa > existing.dataBaixa)) {
+        existing.dataBaixa = dataBaixa;
+      }
+      // If any movement says liquidado, mark as liquidado
+      if (liquidado) existing.liquidado = true;
+    } else {
+      aggregated.set(tituloOmie, {
+        tituloOmie,
+        tituloId: tituloMap.get(tituloOmie) ?? null,
+        contaCorrenteId: d.nCodCC ? ccMap.get(d.nCodCC) ?? null : null,
+        dataBaixa,
+        valorBaixado: r.nValPago ?? 0,
+        valorDesconto: r.nDesconto ?? 0,
+        valorJuros: r.nJuros ?? 0,
+        valorMulta: r.nMulta ?? 0,
+        liquidado,
+      });
+    }
+  }
+
+  const rows = [...aggregated.values()]
+    .filter((r) => r.dataBaixa && r.tituloOmie > 0)
+    .map((r) => ({
+      omie_codigo_lancamento: r.tituloOmie,
+      titulo_id: r.tituloId,
+      conta_corrente_id: r.contaCorrenteId,
+      data_baixa: r.dataBaixa,
+      valor_baixado: r.valorBaixado,
+      valor_desconto: r.valorDesconto,
+      valor_juros: r.valorJuros,
+      valor_multa: r.valorMulta,
+      tipo_baixa: r.liquidado ? 'BAIXA' : 'PARCIAL',
+      liquidado: r.liquidado,
+      updated_at: new Date().toISOString(),
+    }));
 
   const CHUNK = 500;
   let upserted = 0;
