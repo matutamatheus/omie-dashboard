@@ -1,4 +1,4 @@
-import { omieListAll } from './client';
+import { omieListAll, omieListPages } from './client';
 import { OMIE_ENDPOINTS } from './endpoints';
 import {
   ClienteSchema,
@@ -57,14 +57,34 @@ async function upsertBatch(
 // Individual dimension syncs
 // ---------------------------------------------------------------------------
 
-export async function syncClientes(): Promise<number> {
-  const raw = await omieListAll<OmieCliente>({
-    endpoint: OMIE_ENDPOINTS.clientes,
-    call: 'ListarClientes',
-    params: { apenas_importado_api: 'N' },
-    dataKey: 'clientes_cadastro',
-    pageSize: 200,
-  });
+export interface SyncClientesResult {
+  records: number;
+  totalPages: number;
+  lastPage: number;
+  done: boolean;
+}
+
+/**
+ * Sync clientes in page chunks to avoid serverless timeout.
+ * Default: 20 pages at a time (~4000 records).
+ */
+export async function syncClientes(
+  fromPage = 1,
+  toPage?: number,
+): Promise<SyncClientesResult> {
+  const endPage = toPage ?? fromPage + 19;
+
+  const { records: raw, totalPages, lastPage } = await omieListPages<OmieCliente>(
+    {
+      endpoint: OMIE_ENDPOINTS.clientes,
+      call: 'ListarClientes',
+      params: { apenas_importado_api: 'N' },
+      dataKey: 'clientes_cadastro',
+      pageSize: 200,
+    },
+    fromPage,
+    endPage,
+  );
 
   const parsed = safeParse(ClienteSchema, raw);
 
@@ -82,7 +102,8 @@ export async function syncClientes(): Promise<number> {
     updated_at: new Date().toISOString(),
   }));
 
-  return upsertBatch('dim_cliente', rows, 'omie_codigo');
+  const records = await upsertBatch('dim_cliente', rows, 'omie_codigo');
+  return { records, totalPages, lastPage, done: lastPage >= totalPages };
 }
 
 export async function syncContasCorrentes(): Promise<number> {

@@ -1,4 +1,4 @@
-import { omieListAll } from './client';
+import { omieListAll, omieListPages } from './client';
 import { OMIE_ENDPOINTS } from './endpoints';
 import { ContaReceberSchema, type ContaReceber } from './types';
 import { supabaseAdmin } from '../supabase/admin';
@@ -38,36 +38,36 @@ function parseOmieDate(raw: string | undefined | null): string | null {
 export interface SyncContaReceberResult {
   fetched: number;
   upserted: number;
+  totalPages: number;
+  lastPage: number;
+  done: boolean;
 }
 
 /**
  * Fetch contas a receber from Omie and upsert into fact_titulo_receber.
+ * Supports page ranges to avoid serverless timeout.
  *
- * When `lastCursor` is provided (ISO date string), only records altered since
- * that date are fetched (incremental sync). Otherwise all records are fetched.
+ * @param fromPage Starting page (1-based)
+ * @param toPage   Ending page (inclusive). Default: 20 pages from fromPage.
  */
-export async function syncContaReceber(lastCursor?: string): Promise<SyncContaReceberResult> {
-  // Build filter params
-  const params: Record<string, unknown> = {};
+export async function syncContaReceber(
+  fromPage = 1,
+  toPage?: number,
+): Promise<SyncContaReceberResult> {
+  const endPage = toPage ?? fromPage + 19;
 
-  if (lastCursor) {
-    // Omie expects dd/mm/yyyy for date filters
-    const d = new Date(lastCursor);
-    const dd = String(d.getUTCDate()).padStart(2, '0');
-    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const yyyy = d.getUTCFullYear();
-    params.dDtAlterDe = `${dd}/${mm}/${yyyy}`;
-    params.dDtAlterAte = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  }
-
-  // Fetch all pages
-  const raw = await omieListAll<ContaReceber>({
-    endpoint: OMIE_ENDPOINTS.contaReceber,
-    call: 'ListarContasReceber',
-    params,
-    dataKey: 'conta_receber_cadastro',
-    pageSize: 200,
-  });
+  // Fetch page range
+  const { records: raw, totalPages, lastPage } = await omieListPages<ContaReceber>(
+    {
+      endpoint: OMIE_ENDPOINTS.contaReceber,
+      call: 'ListarContasReceber',
+      params: {},
+      dataKey: 'conta_receber_cadastro',
+      pageSize: 200,
+    },
+    fromPage,
+    endPage,
+  );
 
   const parsed: ContaReceber[] = [];
   for (const r of raw) {
@@ -76,7 +76,7 @@ export async function syncContaReceber(lastCursor?: string): Promise<SyncContaRe
   }
 
   if (parsed.length === 0) {
-    return { fetched: 0, upserted: 0 };
+    return { fetched: 0, upserted: 0, totalPages, lastPage, done: lastPage >= totalPages };
   }
 
   // Build FK lookup maps in parallel
@@ -137,5 +137,5 @@ export async function syncContaReceber(lastCursor?: string): Promise<SyncContaRe
     upserted += count ?? chunk.length;
   }
 
-  return { fetched: parsed.length, upserted };
+  return { fetched: parsed.length, upserted, totalPages, lastPage, done: lastPage >= totalPages };
 }

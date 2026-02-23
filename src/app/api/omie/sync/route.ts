@@ -23,6 +23,14 @@ const VALID_STEPS = [
 
 type StepName = (typeof VALID_STEPS)[number];
 
+function getPageParams(request: NextRequest) {
+  const fromPage = parseInt(request.nextUrl.searchParams.get('fromPage') || '1', 10);
+  const toPage = request.nextUrl.searchParams.get('toPage')
+    ? parseInt(request.nextUrl.searchParams.get('toPage')!, 10)
+    : undefined;
+  return { fromPage, toPage };
+}
+
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization');
   if (auth !== `Bearer ${process.env.SYNC_CRON_SECRET}`) {
@@ -39,15 +47,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       error: 'Missing or invalid step parameter',
       validSteps: VALID_STEPS,
+      usage: 'POST /api/omie/sync?step=clientes&fromPage=1&toPage=20',
     }, { status: 400 });
   }
 
   try {
     let result: unknown;
+    const { fromPage, toPage } = getPageParams(request);
 
     switch (step) {
       case 'clientes':
-        result = { entity: 'dim_cliente', records: await syncClientes() };
+        result = await syncClientes(fromPage, toPage);
         break;
       case 'contas_correntes':
         result = { entity: 'dim_conta_corrente', records: await syncContasCorrentes() };
@@ -62,16 +72,11 @@ export async function POST(request: NextRequest) {
         result = { entity: 'dim_vendedor', records: await syncVendedores() };
         break;
       case 'titulos':
-        result = await syncContaReceber();
+        result = await syncContaReceber(fromPage, toPage);
         break;
-      case 'recebimentos': {
-        const fromPage = parseInt(request.nextUrl.searchParams.get('fromPage') || '1', 10);
-        const toPage = request.nextUrl.searchParams.get('toPage')
-          ? parseInt(request.nextUrl.searchParams.get('toPage')!, 10)
-          : undefined;
+      case 'recebimentos':
         result = await syncRecebimentos(fromPage, toPage);
         break;
-      }
     }
 
     return NextResponse.json({
