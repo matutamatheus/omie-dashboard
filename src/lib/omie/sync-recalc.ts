@@ -98,20 +98,28 @@ export async function recalcTituloMetrics(): Promise<RecalcResult> {
     });
   }
 
-  // 5. Batch upsert
+  // 5. Update in parallel batches (can't use upsert as it requires all NOT NULL cols)
   let updated = 0;
-  const BATCH = 500;
+  const CONCURRENT = 20;
 
-  for (let i = 0; i < updates.length; i += BATCH) {
-    const batch = updates.slice(i, i + BATCH);
-    const { error, count } = await supabaseAdmin
-      .from('fact_titulo_receber')
-      .upsert(batch, { onConflict: 'id', count: 'exact' });
+  for (let i = 0; i < updates.length; i += CONCURRENT) {
+    const batch = updates.slice(i, i + CONCURRENT);
+    const results = await Promise.allSettled(
+      batch.map((upd) =>
+        supabaseAdmin
+          .from('fact_titulo_receber')
+          .update({
+            caixa_recebido: upd.caixa_recebido,
+            desconto_concedido: upd.desconto_concedido,
+            principal_liquidado: upd.principal_liquidado,
+            saldo_em_aberto: upd.saldo_em_aberto,
+          })
+          .eq('id', upd.id)
+      ),
+    );
 
-    if (error) {
-      errors.push(`Batch upsert at ${i}: ${error.message}`);
-    } else {
-      updated += count ?? batch.length;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && !r.value.error) updated++;
     }
   }
 
