@@ -7,56 +7,87 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Count rows in key tables
-  const [titCount, recCount] = await Promise.all([
-    supabaseAdmin.from('fact_titulo_receber').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('fact_recebimento').select('id', { count: 'exact', head: true }),
-  ]);
-
-  // Sample 3 recebimentos
-  const { data: sampleRec } = await supabaseAdmin
-    .from('fact_recebimento')
-    .select('omie_codigo_lancamento, titulo_id, valor_baixado')
-    .limit(3);
-
-  // Sample 3 titulos
-  const { data: sampleTit } = await supabaseAdmin
-    .from('fact_titulo_receber')
-    .select('id, omie_codigo_titulo, valor_documento, saldo_em_aberto, caixa_recebido')
-    .limit(3);
-
-  // Check if any recebimento omie_codigo_lancamento matches any titulo omie_codigo_titulo
-  const { data: sampleRecIds } = await supabaseAdmin
-    .from('fact_recebimento')
-    .select('omie_codigo_lancamento')
+  // Check vendedor and departamento data
+  const { data: vendedores } = await supabaseAdmin
+    .from('dim_vendedor')
+    .select('id, omie_codigo, nome, ativo')
     .limit(10);
 
-  const recIds = (sampleRecIds ?? []).map(r => r.omie_codigo_lancamento);
+  const { data: departamentos } = await supabaseAdmin
+    .from('dim_departamento')
+    .select('id, omie_codigo, descricao, ativo')
+    .limit(10);
 
-  // Check if those IDs exist in titulos
-  const { data: matchingTitulos } = await supabaseAdmin
+  // Check how many titulos have vendedor_id and departamento_id set
+  const { data: titulosWithVendedor } = await supabaseAdmin
     .from('fact_titulo_receber')
-    .select('id, omie_codigo_titulo')
-    .in('omie_codigo_titulo', recIds.length > 0 ? recIds : [-1]);
+    .select('id, vendedor_id, departamento_id')
+    .not('vendedor_id', 'is', null)
+    .limit(5);
 
-  // Count distinct status_titulo values
-  const { data: statuses } = await supabaseAdmin
+  const { data: titulosWithDept } = await supabaseAdmin
     .from('fact_titulo_receber')
-    .select('status_titulo')
-    .limit(10000);
+    .select('id, vendedor_id, departamento_id')
+    .not('departamento_id', 'is', null)
+    .limit(5);
 
-  const statusCounts: Record<string, number> = {};
-  for (const row of statuses ?? []) {
-    statusCounts[row.status_titulo] = (statusCounts[row.status_titulo] || 0) + 1;
+  const { count: totalTitulos } = await supabaseAdmin
+    .from('fact_titulo_receber')
+    .select('id', { count: 'exact', head: true });
+
+  const { count: titulosWithVendedorCount } = await supabaseAdmin
+    .from('fact_titulo_receber')
+    .select('id', { count: 'exact', head: true })
+    .not('vendedor_id', 'is', null);
+
+  const { count: titulosWithDeptCount } = await supabaseAdmin
+    .from('fact_titulo_receber')
+    .select('id', { count: 'exact', head: true })
+    .not('departamento_id', 'is', null);
+
+  // Sample a titulo with its joins to check names
+  const { data: sampleTitulo } = await supabaseAdmin
+    .from('fact_titulo_receber')
+    .select(`
+      id, omie_codigo_titulo, vendedor_id, departamento_id,
+      dim_vendedor(id, omie_codigo, nome),
+      dim_departamento(id, omie_codigo, descricao)
+    `)
+    .not('vendedor_id', 'is', null)
+    .limit(3);
+
+  // Probe Omie API for a sample conta a receber to check vendedor/departamento fields
+  const APP_KEY = process.env.OMIE_APP_KEY || '';
+  const APP_SECRET = process.env.OMIE_APP_SECRET || '';
+  const BASE = 'https://app.omie.com.br/api/v1';
+
+  let sampleOmieTitulo = null;
+  try {
+    const res = await fetch(BASE + '/financas/contareceber/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        call: 'ListarContasReceber',
+        app_key: APP_KEY,
+        app_secret: APP_SECRET,
+        param: [{ pagina: 1, registros_por_pagina: 2 }],
+      }),
+    });
+    const json = await res.json();
+    sampleOmieTitulo = json.conta_receber_cadastro?.slice(0, 2);
+  } catch (e) {
+    sampleOmieTitulo = { error: String(e) };
   }
 
   return NextResponse.json({
-    titulos_count: titCount.count,
-    recebimentos_count: recCount.count,
-    sample_recebimentos: sampleRec,
-    sample_titulos: sampleTit,
-    recebimento_ids_sample: recIds,
-    matching_titulos_for_rec_ids: matchingTitulos,
-    status_titulo_distribution: statusCounts,
+    vendedores,
+    departamentos,
+    totalTitulos,
+    titulosWithVendedorCount,
+    titulosWithDeptCount,
+    sampleTitulosWithVendedor: titulosWithVendedor,
+    sampleTitulosWithDept: titulosWithDept,
+    sampleTituloJoined: sampleTitulo,
+    sampleOmieTitulo,
   });
 }
