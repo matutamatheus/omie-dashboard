@@ -3,35 +3,34 @@ import type {
   TituloRow, RecebimentoRow, DimensionOptions, PaginatedResult, DashboardFilters,
 } from '@/types/dashboard';
 import * as mockProvider from '@/lib/mock/data-provider';
+import * as supabaseProvider from '@/lib/supabase/data-provider';
 
 function isMockMode(): boolean {
   return process.env.NEXT_PUBLIC_DATA_MODE !== 'real';
 }
 
+function provider() {
+  return isMockMode() ? mockProvider : supabaseProvider;
+}
+
 export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
-  if (isMockMode()) return mockProvider.getKPIs(filters);
-  // TODO: implement Supabase provider
-  return mockProvider.getKPIs(filters);
+  return provider().getKPIs(filters);
 }
 
 export async function getAgingBuckets(filters: DashboardFilters): Promise<AgingBucketData[]> {
-  if (isMockMode()) return mockProvider.getAgingBuckets(filters);
-  return mockProvider.getAgingBuckets(filters);
+  return provider().getAgingBuckets(filters);
 }
 
 export async function getAgingByClient(filters: DashboardFilters): Promise<AgingClientData[]> {
-  if (isMockMode()) return mockProvider.getAgingByClient(filters);
-  return mockProvider.getAgingByClient(filters);
+  return provider().getAgingByClient(filters);
 }
 
 export async function getTrends(filters: DashboardFilters): Promise<TrendPoint[]> {
-  if (isMockMode()) return mockProvider.getTrends(filters);
-  return mockProvider.getTrends(filters);
+  return provider().getTrends(filters);
 }
 
 export async function getHorizons(filters: DashboardFilters): Promise<HorizonData[]> {
-  if (isMockMode()) return mockProvider.getHorizons(filters);
-  return mockProvider.getHorizons(filters);
+  return provider().getHorizons(filters);
 }
 
 export async function getTitulos(
@@ -39,8 +38,7 @@ export async function getTitulos(
   page?: number,
   pageSize?: number
 ): Promise<PaginatedResult<TituloRow>> {
-  if (isMockMode()) return mockProvider.getTitulos(filters, page, pageSize);
-  return mockProvider.getTitulos(filters, page, pageSize);
+  return provider().getTitulos(filters, page, pageSize);
 }
 
 export async function getRecebimentos(
@@ -48,11 +46,9 @@ export async function getRecebimentos(
   page?: number,
   pageSize?: number
 ): Promise<PaginatedResult<RecebimentoRow>> {
-  if (isMockMode()) return mockProvider.getRecebimentos(filters, page, pageSize);
-  return mockProvider.getRecebimentos(filters, page, pageSize);
+  return provider().getRecebimentos(filters, page, pageSize);
 }
 
 export async function getDimensionOptions(): Promise<DimensionOptions> {
-  if (isMockMode()) return mockProvider.getDimensionOptions();
-  return mockProvider.getDimensionOptions();
+  return provider().getDimensionOptions();
 }
