@@ -3,10 +3,7 @@
 import { useState } from 'react';
 import { FilterBar } from '@/components/filters/FilterBar';
 import { KPICards } from '@/components/dashboard/KPICards';
-import { TrendLineChart } from '@/components/charts/TrendLineChart';
 import { HorizonBarChart } from '@/components/charts/HorizonBarChart';
-import { AgingHeatmap } from '@/components/charts/AgingHeatmap';
-import { AgingStackedBars } from '@/components/charts/AgingStackedBars';
 import { TitulosTable } from '@/components/tables/TitulosTable';
 import { RecebimentosTable } from '@/components/tables/RecebimentosTable';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -20,7 +17,6 @@ function getDefaultFilters(): DashboardFilters {
   return {
     dateStart: start.toISOString().split('T')[0],
     dateEnd: end.toISOString().split('T')[0],
-    mode: 'vencimento',
     horizon: '30d',
   };
 }
@@ -55,17 +51,7 @@ export function DashboardShell() {
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-6">
         <FilterBar filters={filters} onChange={setFilters} />
         <KPICards filters={filters} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <TrendLineChart filters={filters} />
-          <HorizonBarChart filters={filters} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <AgingHeatmap filters={filters} />
-          <AgingStackedBars filters={filters} />
-        </div>
-
+        <HorizonBarChart filters={filters} />
         <TitulosTable filters={filters} />
         <RecebimentosTable filters={filters} />
       </main>

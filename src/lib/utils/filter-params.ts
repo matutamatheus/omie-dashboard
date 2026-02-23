@@ -1,11 +1,10 @@
 import type { DashboardFilters } from '@/types/dashboard';
 
-/** Build URLSearchParams from DashboardFilters, including all dimension filters. */
+/** Build URLSearchParams from DashboardFilters. */
 export function buildFilterParams(filters: DashboardFilters): URLSearchParams {
   const params = new URLSearchParams({
     dateStart: filters.dateStart,
     dateEnd: filters.dateEnd,
-    mode: filters.mode,
   });
   if (filters.contaCorrenteId) params.set('contaCorrenteId', String(filters.contaCorrenteId));
   if (filters.departamentoId) params.set('departamentoId', String(filters.departamentoId));

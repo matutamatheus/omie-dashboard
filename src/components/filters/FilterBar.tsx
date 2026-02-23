@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { PeriodSelector } from './PeriodSelector';
-import { ModeToggle } from './ModeToggle';
 import { DimensionFilter } from './DimensionFilter';
 import { Download, RotateCcw } from 'lucide-react';
 import type { DashboardFilters, DimensionOptions } from '@/types/dashboard';
@@ -35,7 +34,6 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
     onChange({
       dateStart: start.toISOString().split('T')[0],
       dateEnd: end.toISOString().split('T')[0],
-      mode: 'vencimento',
       horizon: '30d',
       contaCorrenteId: undefined,
       departamentoId: undefined,
@@ -49,7 +47,6 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
       type,
       dateStart: filters.dateStart,
       dateEnd: filters.dateEnd,
-      mode: filters.mode,
     });
     return `/api/dashboard/export?${params}`;
   };
@@ -69,10 +66,6 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
             setPreset('custom');
             onChange({ ...filters, dateStart: start, dateEnd: end, horizon: 'custom' });
           }}
-        />
-        <ModeToggle
-          mode={filters.mode}
-          onChange={(mode) => onChange({ ...filters, mode })}
         />
       </div>
 

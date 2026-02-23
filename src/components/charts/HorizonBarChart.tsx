@@ -32,7 +32,7 @@ export function HorizonBarChart({ filters }: Props) {
   return (
     <Card>
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-        Previsto por Horizonte ({filters.mode === 'previsao' ? 'Previsao' : 'Vencimento'})
+        A Receber por Horizonte
       </h3>
       {loading ? (
         <div className="h-64 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />

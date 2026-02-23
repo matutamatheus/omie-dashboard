@@ -1,8 +1,5 @@
 export {
   getKPIs,
-  getAgingBuckets,
-  getAgingByClient,
-  getTrends,
   getHorizons,
   getTitulos,
   getRecebimentos,

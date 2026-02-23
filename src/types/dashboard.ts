@@ -1,10 +1,8 @@
-export type DateMode = 'vencimento' | 'previsao';
 export type HorizonKey = 'today' | '7d' | '14d' | '30d' | '60d' | '90d' | '6m' | 'custom';
 
 export interface DashboardFilters {
   dateStart: string;       // ISO date string
   dateEnd: string;         // ISO date string
-  mode: DateMode;
   horizon: HorizonKey;
   contaCorrenteId?: number;
   departamentoId?: number;
@@ -14,34 +12,8 @@ export interface DashboardFilters {
 
 export interface KPIData {
   recebido: number;
-  previsto: number;
-  emAtraso: number;
-  taxaInadimplencia: number;
-  clientesInadimplentes: number;
-  churnRecebiveis: number;
-}
-
-export interface AgingBucketData {
-  bucket: string;
-  saldo: number;
-  quantidade: number;
-}
-
-export interface AgingClientData {
-  clienteId: number;
-  clienteNome: string;
-  emDia: number;
-  de1a30: number;
-  de31a60: number;
-  de61a90: number;
-  acima90: number;
-  total: number;
-}
-
-export interface TrendPoint {
-  date: string;
-  recebido: number;
-  previsto: number;
+  aReceber: number;
+  vencido: number;
 }
 
 export interface HorizonData {
@@ -57,14 +29,10 @@ export interface TituloRow {
   numeroDocumento?: string;
   numeroParcela?: string;
   dataVencimento: string;
-  dataPrevisao?: string;
   valorDocumento: number;
   saldoEmAberto: number;
-  caixaRecebido: number;
-  descontoConcedido: number;
   status: string;
   diasAtraso: number;
-  agingBucket: string;
   contaCorrente?: string;
   vendedor?: string;
   departamento?: string;
