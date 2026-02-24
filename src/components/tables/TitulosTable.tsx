@@ -66,13 +66,29 @@ export function TitulosTable({ filters }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          Titulos em Aberto
-        </h3>
-        <span className="text-xs text-gray-400">
-          {result ? `${result.total} titulos` : ''}
-        </span>
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Titulos em Aberto
+          </h3>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {result ? `${result.total} titulos` : ''}
+          </span>
+        </div>
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+          Lista de todos os titulos (boletos, notas, parcelas) com saldo pendente. Cada linha representa um documento financeiro emitido para um cliente.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500">
+          <span><strong className="text-gray-500 dark:text-gray-400">Cliente:</strong> Razao social do devedor</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Documento:</strong> Numero do documento fiscal</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Parcela:</strong> Numero da parcela (quando parcelado)</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Vencimento:</strong> Data limite para pagamento</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Valor:</strong> Valor original do documento</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Saldo:</strong> Quanto ainda falta pagar</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Dias Atraso:</strong> Dias desde o vencimento (0 = em dia)</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Status:</strong> Situacao atual do titulo no Omie</span>
+          <span><strong className="text-gray-500 dark:text-gray-400">Vendedor:</strong> Responsavel pela venda</span>
+        </div>
       </div>
 
       {loading ? (

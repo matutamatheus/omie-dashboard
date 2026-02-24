@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useTheme } from 'next-themes';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts';
 import { Card } from '@/components/ui/Card';
 import { formatCurrency, formatCompactCurrency } from '@/lib/utils/formatters';
@@ -39,6 +40,15 @@ export function DailyReceivablesChart({ filters }: Props) {
   const [data, setData] = useState<DailyReceivable[]>([]);
   const [loading, setLoading] = useState(true);
   const [rangeKey, setRangeKey] = useState<RangeKey>('all');
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
+  const gridColor = isDark ? '#374151' : '#e5e7eb';
+  const axisColor = isDark ? '#9ca3af' : '#6b7280';
+  const tooltipBg = isDark ? '#1f2937' : '#ffffff';
+  const tooltipBorder = isDark ? '#374151' : '#e5e7eb';
+  const tooltipText = isDark ? '#f3f4f6' : '#1f2937';
+  const refLineColor = isDark ? '#ef4444' : '#dc2626';
 
   const selectedRange = useMemo(
     () => RANGE_OPTIONS.find((o) => o.key === rangeKey)!,
@@ -66,7 +76,7 @@ export function DailyReceivablesChart({ filters }: Props) {
 
   return (
     <Card>
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-1">
         <div>
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
             Vencimentos por Dia
@@ -95,18 +105,21 @@ export function DailyReceivablesChart({ filters }: Props) {
           ))}
         </div>
       </div>
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-4">
+        Mostra dia a dia quanto vence (azul) e quanto foi recebido (verde). Barras azuis representam o saldo em aberto de titulos com vencimento naquele dia. Barras verdes representam baixas/pagamentos efetivamente recebidos. A linha vermelha marca o dia de hoje.
+      </p>
       {loading ? (
         <div className="h-72 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />
       ) : data.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">Nenhum vencimento no período selecionado</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">Nenhum vencimento no periodo selecionado</p>
       ) : (
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} opacity={0.3} />
             <XAxis
               dataKey="date"
               tick={{ fontSize: 10 }}
-              stroke="#9ca3af"
+              stroke={axisColor}
               interval={data.length > 60 ? Math.floor(data.length / 20) : data.length > 30 ? Math.floor(data.length / 15) : 0}
               angle={data.length > 15 ? -45 : 0}
               textAnchor={data.length > 15 ? 'end' : 'middle'}
@@ -114,7 +127,7 @@ export function DailyReceivablesChart({ filters }: Props) {
             />
             <YAxis
               tick={{ fontSize: 11 }}
-              stroke="#9ca3af"
+              stroke={axisColor}
               tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}K`}
             />
             <Tooltip
@@ -124,10 +137,10 @@ export function DailyReceivablesChart({ filters }: Props) {
               ]}
               labelFormatter={(label) => `Data: ${label}`}
               contentStyle={{
-                backgroundColor: '#1f2937',
-                border: '1px solid #374151',
+                backgroundColor: tooltipBg,
+                border: `1px solid ${tooltipBorder}`,
                 borderRadius: '8px',
-                color: '#f3f4f6',
+                color: tooltipText,
                 fontSize: 12,
               }}
             />
@@ -138,9 +151,9 @@ export function DailyReceivablesChart({ filters }: Props) {
             {(rangeKey === 'all' || rangeKey.includes('past')) && (
               <ReferenceLine
                 x={todayLabel}
-                stroke="#ef4444"
+                stroke={refLineColor}
                 strokeDasharray="3 3"
-                label={{ value: 'Hoje', position: 'top', fontSize: 10, fill: '#ef4444' }}
+                label={{ value: 'Hoje', position: 'top', fontSize: 10, fill: refLineColor }}
               />
             )}
             <Bar dataKey="recebido" radius={[2, 2, 0, 0]} fill="#10b981" />

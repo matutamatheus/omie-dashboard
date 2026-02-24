@@ -12,12 +12,13 @@ interface KPICardProps {
   title: string;
   value: string;
   subtitle?: string;
+  description?: string;
   icon: LucideIcon;
   color: string;
   loading?: boolean;
 }
 
-function KPICard({ title, value, subtitle, icon: Icon, color, loading }: KPICardProps) {
+function KPICard({ title, value, subtitle, description, icon: Icon, color, loading }: KPICardProps) {
   const colorClasses: Record<string, { bg: string; icon: string }> = {
     green: { bg: 'bg-green-100 dark:bg-green-900/30', icon: 'text-green-600 dark:text-green-400' },
     blue: { bg: 'bg-blue-100 dark:bg-blue-900/30', icon: 'text-blue-600 dark:text-blue-400' },
@@ -55,6 +56,11 @@ function KPICard({ title, value, subtitle, icon: Icon, color, loading }: KPICard
           <Icon className={cn('w-5 h-5', c.icon)} />
         </div>
       </div>
+      {description && (
+        <p className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-[10px] leading-relaxed text-gray-400 dark:text-gray-500">
+          {description}
+        </p>
+      )}
     </div>
   );
 }
@@ -83,6 +89,7 @@ export function KPICards({ filters }: KPICardsProps) {
       title: 'Recebido no Periodo',
       value: data ? formatCompactCurrency(data.recebido) : '',
       subtitle: 'Entrada de caixa no periodo',
+      description: 'Soma de todos os valores baixados (pagos) no periodo selecionado nos filtros. Inclui valor principal, juros e multas recebidos.',
       icon: DollarSign,
       color: 'green',
     },
@@ -90,6 +97,7 @@ export function KPICards({ filters }: KPICardsProps) {
       title: 'A Receber',
       value: data ? formatCompactCurrency(data.aReceber) : '',
       subtitle: 'Saldo total em aberto',
+      description: 'Total de saldo em aberto de todos os titulos com valor pendente, independente da data. Representa o quanto a empresa ainda tem a receber.',
       icon: TrendingUp,
       color: 'blue',
     },
@@ -97,6 +105,7 @@ export function KPICards({ filters }: KPICardsProps) {
       title: 'Vencido',
       value: data ? formatCompactCurrency(data.vencido) : '',
       subtitle: data ? `${data.titulosVencidos} titulo${data.titulosVencidos !== 1 ? 's' : ''} em atraso` : '',
+      description: 'Soma do saldo em aberto dos titulos cuja data de vencimento ja passou. Sao valores que deveriam ter sido pagos mas ainda estao pendentes.',
       icon: AlertTriangle,
       color: 'red',
     },
@@ -104,6 +113,7 @@ export function KPICards({ filters }: KPICardsProps) {
       title: 'Taxa de Inadimplencia',
       value: data ? `${data.taxaInadimplencia.toFixed(1)}%` : '',
       subtitle: 'Vencido / Total a receber',
+      description: 'Percentual do valor vencido sobre o total a receber. Indica o nivel de atraso da carteira. Quanto menor, mais saudavel a carteira.',
       icon: Percent,
       color: 'amber',
     },
@@ -111,6 +121,7 @@ export function KPICards({ filters }: KPICardsProps) {
       title: 'Clientes Inadimplentes',
       value: data ? String(data.clientesInadimplentes) : '',
       subtitle: 'Com titulos vencidos',
+      description: 'Quantidade de clientes unicos que possuem pelo menos um titulo vencido com saldo em aberto. Um cliente com varios titulos vencidos conta apenas uma vez.',
       icon: Users,
       color: 'purple',
     },
@@ -118,6 +129,7 @@ export function KPICards({ filters }: KPICardsProps) {
       title: 'Titulos Vencidos',
       value: data ? String(data.titulosVencidos) : '',
       subtitle: 'Documentos em atraso',
+      description: 'Quantidade total de titulos (boletos, notas, parcelas) com data de vencimento anterior a hoje e que ainda possuem saldo em aberto.',
       icon: FileWarning,
       color: 'orange',
     },
