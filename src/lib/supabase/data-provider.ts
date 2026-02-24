@@ -73,7 +73,7 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
       .from('fact_titulo_receber')
       .select('saldo_em_aberto')
       .gt('saldo_em_aberto', 0)
-      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+      // saldo > 0 already excludes LIQUIDADO/CANCELADO (saldo = 0)
       .range(from, to);
     applyDimensionFilters(q, filters);
     return q;
@@ -91,7 +91,7 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
       .select('saldo_em_aberto, cliente_id')
       .lt('data_vencimento', today)
       .gt('saldo_em_aberto', 0)
-      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+      // saldo > 0 already excludes LIQUIDADO/CANCELADO (saldo = 0)
       .range(from, to);
     applyDimensionFilters(q, filters);
     return q;
@@ -131,7 +131,7 @@ export async function getHorizons(filters: DashboardFilters): Promise<HorizonDat
         .gte('data_vencimento', rangeStart)
         .lte('data_vencimento', rangeEnd)
         .gt('saldo_em_aberto', 0)
-        .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+        // saldo > 0 already excludes LIQUIDADO/CANCELADO (saldo = 0)
         .range(from, to);
       applyDimensionFilters(q, filters);
       return q;
@@ -166,7 +166,7 @@ export async function getDailyReceivables(
       .from('fact_titulo_receber')
       .select('data_vencimento, saldo_em_aberto')
       .gt('saldo_em_aberto', 0)
-      .not('status_titulo', 'in', '("CANCELADO","LIQUIDADO")')
+      // saldo > 0 already excludes LIQUIDADO/CANCELADO (saldo = 0)
       .gte('data_vencimento', start)
       .lte('data_vencimento', end)
       .order('data_vencimento', { ascending: true })
