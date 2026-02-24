@@ -53,14 +53,21 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
   const today = todayISO();
 
   // recebido: entrada de caixa no periodo (from fact_recebimento)
-  const recebidoRows = await fetchAllRows<{ valor_baixado: number; valor_juros: number; valor_multa: number }>((from, to) =>
-    supabaseAdmin
+  const needsJoin = hasDimensionFilters(filters);
+  const recebSelect = needsJoin
+    ? 'valor_baixado, valor_juros, valor_multa, fact_titulo_receber!inner(conta_corrente_id, vendedor_id, departamento_id)'
+    : 'valor_baixado, valor_juros, valor_multa';
+
+  const recebidoRows = await fetchAllRows<{ valor_baixado: number; valor_juros: number; valor_multa: number }>((from, to) => {
+    const q = supabaseAdmin
       .from('fact_recebimento')
-      .select('valor_baixado, valor_juros, valor_multa')
+      .select(recebSelect)
       .gte('data_baixa', dateStart)
       .lte('data_baixa', dateEnd)
-      .range(from, to),
-  );
+      .range(from, to);
+    if (needsJoin) applyRecebDimensionFilters(q, filters);
+    return q;
+  });
 
   const recebido = recebidoRows.reduce(
     (sum, r) => sum + (Number(r.valor_baixado) || 0) + (Number(r.valor_juros) || 0) + (Number(r.valor_multa) || 0),
@@ -176,14 +183,20 @@ export async function getDailyReceivables(
   });
 
   // Recebimentos (baixas) por dia
+  const needsRecebJoin = hasDimensionFilters(filters);
+  const recebSelectFields = needsRecebJoin
+    ? 'data_baixa, valor_baixado, valor_juros, valor_multa, fact_titulo_receber!inner(conta_corrente_id, vendedor_id, departamento_id)'
+    : 'data_baixa, valor_baixado, valor_juros, valor_multa';
+
   const recebRows = await fetchAllRows<{ data_baixa: string; valor_baixado: number; valor_juros: number; valor_multa: number }>((from, to) => {
     const q = supabaseAdmin
       .from('fact_recebimento')
-      .select('data_baixa, valor_baixado, valor_juros, valor_multa')
+      .select(recebSelectFields)
       .gte('data_baixa', start)
       .lte('data_baixa', end)
       .order('data_baixa', { ascending: true })
       .range(from, to);
+    if (needsRecebJoin) applyRecebDimensionFilters(q, filters);
     return q;
   });
 
@@ -238,6 +251,10 @@ export async function getTitulos(
   } else {
     query = query.in('status_titulo', ['A VENCER', 'ATRASADO', 'PARCIAL']);
   }
+
+  // Period filter on data_vencimento
+  if (filters.dateStart) query = query.gte('data_vencimento', filters.dateStart);
+  if (filters.dateEnd) query = query.lte('data_vencimento', filters.dateEnd);
 
   applyDimensionFilters(query, filters);
   query = query.order('data_vencimento', { ascending: true });
@@ -352,4 +369,16 @@ function applyDimensionFilters(query: any, filters: DashboardFilters): void {
   if (filters.contaCorrenteId) query.eq('conta_corrente_id', filters.contaCorrenteId);
   if (filters.vendedorId) query.eq('vendedor_id', filters.vendedorId);
   if (filters.departamentoId) query.eq('departamento_id', filters.departamentoId);
+}
+
+/** Check if any dimension filter is active */
+function hasDimensionFilters(filters: DashboardFilters): boolean {
+  return !!(filters.contaCorrenteId || filters.vendedorId || filters.departamentoId);
+}
+
+/** Apply dimension filters to fact_recebimento queries through fact_titulo_receber join */
+function applyRecebDimensionFilters(query: any, filters: DashboardFilters): void {
+  if (filters.contaCorrenteId) query.eq('fact_titulo_receber.conta_corrente_id', filters.contaCorrenteId);
+  if (filters.vendedorId) query.eq('fact_titulo_receber.vendedor_id', filters.vendedorId);
+  if (filters.departamentoId) query.eq('fact_titulo_receber.departamento_id', filters.departamentoId);
 }
