@@ -17,6 +17,8 @@ export interface KPIData {
   taxaInadimplencia: number;   // % vencido sobre total a receber
   clientesInadimplentes: number; // qtd de clientes com títulos vencidos
   titulosVencidos: number;     // qtd de títulos vencidos
+  dso: number;
+  taxaRecebimento: number;
 }
 
 export interface HorizonData {
@@ -73,4 +75,49 @@ export interface PaginatedResult<T> {
   total: number;
   page: number;
   pageSize: number;
+}
+
+// --- CFO Metrics ---
+
+export interface AgingBucket {
+  bucket: '1-30' | '31-60' | '61-90' | '90+';
+  label: string;
+  total: number;
+  count: number;
+}
+
+export interface ClienteInadimplente {
+  clienteId: number;
+  clienteNome: string;
+  clienteCnpjCpf?: string;
+  totalVencido: number;
+  titulosVencidos: number;
+  diasMaisAntigo: number;
+  dataVencimentoMaisAntigo: string;
+}
+
+export interface ConcentracaoData {
+  topN: number;
+  label: string;
+  totalSaldo: number;
+  percentual: number;
+  clientes: { nome: string; saldo: number }[];
+}
+
+export interface EvolucaoMensalData {
+  mes: string;
+  mesLabel: string;
+  recebido: number;
+  vencido: number;
+  saldoEmAberto: number;
+}
+
+export interface VendedorPerformance {
+  vendedorId: number;
+  vendedorNome: string;
+  totalAReceber: number;
+  totalVencido: number;
+  taxaInadimplencia: number;
+  titulosTotal: number;
+  titulosVencidos: number;
 }

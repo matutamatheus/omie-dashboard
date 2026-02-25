@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { formatCompactCurrency } from '@/lib/utils/formatters';
 import { buildFilterParams } from '@/lib/utils/filter-params';
-import { DollarSign, TrendingUp, AlertTriangle, Percent, Users, FileWarning } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertTriangle, Percent, Users, FileWarning, Clock, Target } from 'lucide-react';
 import type { KPIData, DashboardFilters } from '@/types/dashboard';
 import type { LucideIcon } from 'lucide-react';
 
@@ -26,6 +26,8 @@ function KPICard({ title, value, subtitle, description, icon: Icon, color, loadi
     amber: { bg: 'bg-amber-100 dark:bg-amber-900/30', icon: 'text-amber-600 dark:text-amber-400' },
     purple: { bg: 'bg-purple-100 dark:bg-purple-900/30', icon: 'text-purple-600 dark:text-purple-400' },
     orange: { bg: 'bg-orange-100 dark:bg-orange-900/30', icon: 'text-orange-600 dark:text-orange-400' },
+    teal: { bg: 'bg-teal-100 dark:bg-teal-900/30', icon: 'text-teal-600 dark:text-teal-400' },
+    cyan: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', icon: 'text-cyan-600 dark:text-cyan-400' },
   };
 
   const c = colorClasses[color] || colorClasses.blue;
@@ -133,10 +135,26 @@ export function KPICards({ filters }: KPICardsProps) {
       icon: FileWarning,
       color: 'orange',
     },
+    {
+      title: 'DSO',
+      value: data ? `${data.dso} dias` : '',
+      subtitle: 'Days Sales Outstanding',
+      description: 'Prazo medio de recebimento em dias. Calcula quantos dias a empresa leva para receber apos a venda. Quanto menor, mais rapido o recebimento.',
+      icon: Clock,
+      color: 'teal',
+    },
+    {
+      title: 'Taxa de Recebimento',
+      value: data ? `${data.taxaRecebimento.toFixed(1)}%` : '',
+      subtitle: 'Recebido / Vencido no periodo',
+      description: 'Percentual de titulos que venceram no periodo e foram efetivamente recebidos. Quanto mais proximo de 100%, melhor a eficiencia de cobranca.',
+      icon: Target,
+      color: 'cyan',
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {kpis.map((kpi) => (
         <KPICard key={kpi.title} {...kpi} loading={loading} />
       ))}

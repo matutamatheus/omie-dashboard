@@ -10,6 +10,11 @@ import type {
   DimensionOptions,
   PaginatedResult,
   DashboardFilters,
+  AgingBucket,
+  ClienteInadimplente,
+  ConcentracaoData,
+  EvolucaoMensalData,
+  VendedorPerformance,
 } from '@/types/dashboard';
 
 // ---------------------------------------------------------------------------
@@ -113,7 +118,29 @@ export async function getKPIs(filters: DashboardFilters): Promise<KPIData> {
   const clientesInadimplentes = new Set(vencidoRows.map((r) => r.cliente_id)).size;
   const taxaInadimplencia = aReceber > 0 ? (vencido / aReceber) * 100 : 0;
 
-  return { recebido, aReceber, vencido, taxaInadimplencia, clientesInadimplentes, titulosVencidos };
+  // DSO: (aReceber / recebido) * diasDoPeriodo
+  const diasDoPeriodo = Math.max(1,
+    Math.ceil((new Date(dateEnd).getTime() - new Date(dateStart).getTime()) / (1000 * 60 * 60 * 24))
+  );
+  const dso = recebido > 0 ? Math.round((aReceber / recebido) * diasDoPeriodo) : 0;
+
+  // Taxa de Recebimento: recebido / valor que venceu no periodo
+  const dueInPeriodRows = await fetchAllRows<{ valor_documento: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('valor_documento')
+      .gte('data_vencimento', dateStart)
+      .lte('data_vencimento', dateEnd)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+  const totalDueInPeriod = dueInPeriodRows.reduce(
+    (sum, r) => sum + (Number(r.valor_documento) || 0), 0
+  );
+  const taxaRecebimento = totalDueInPeriod > 0 ? (recebido / totalDueInPeriod) * 100 : 0;
+
+  return { recebido, aReceber, vencido, taxaInadimplencia, clientesInadimplentes, titulosVencidos, dso, taxaRecebimento };
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +386,291 @@ export async function getDimensionOptions(): Promise<DimensionOptions> {
     departamentos: ((deptResult as any).data ?? []).map((d: any) => ({ id: d.id, label: d.descricao })),
     vendedores: ((vendResult as any).data ?? []).map((v: any) => ({ id: v.id, label: v.nome })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// 6. getAgingAnalysis
+// ---------------------------------------------------------------------------
+
+export async function getAgingAnalysis(filters: DashboardFilters): Promise<AgingBucket[]> {
+  const today = todayISO();
+
+  const rows = await fetchAllRows<{ data_vencimento: string; saldo_em_aberto: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('data_vencimento, saldo_em_aberto')
+      .lt('data_vencimento', today)
+      .gt('saldo_em_aberto', 0)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+
+  const buckets: Record<string, { total: number; count: number }> = {
+    '1-30': { total: 0, count: 0 },
+    '31-60': { total: 0, count: 0 },
+    '61-90': { total: 0, count: 0 },
+    '90+': { total: 0, count: 0 },
+  };
+
+  for (const r of rows) {
+    const days = daysOverdueFromString(r.data_vencimento);
+    const saldo = Number(r.saldo_em_aberto) || 0;
+    if (days <= 30) { buckets['1-30'].total += saldo; buckets['1-30'].count++; }
+    else if (days <= 60) { buckets['31-60'].total += saldo; buckets['31-60'].count++; }
+    else if (days <= 90) { buckets['61-90'].total += saldo; buckets['61-90'].count++; }
+    else { buckets['90+'].total += saldo; buckets['90+'].count++; }
+  }
+
+  return [
+    { bucket: '1-30' as const, label: '1-30 dias', ...buckets['1-30'] },
+    { bucket: '31-60' as const, label: '31-60 dias', ...buckets['31-60'] },
+    { bucket: '61-90' as const, label: '61-90 dias', ...buckets['61-90'] },
+    { bucket: '90+' as const, label: '90+ dias', ...buckets['90+'] },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// 7. getTopClientesInadimplentes
+// ---------------------------------------------------------------------------
+
+export async function getTopClientesInadimplentes(
+  filters: DashboardFilters,
+  limit: number = 20,
+): Promise<ClienteInadimplente[]> {
+  const today = todayISO();
+
+  const rows = await fetchAllRows<{
+    cliente_id: number;
+    data_vencimento: string;
+    saldo_em_aberto: number;
+    dim_cliente: { razao_social: string; cnpj_cpf?: string } | null;
+  }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('cliente_id, data_vencimento, saldo_em_aberto, dim_cliente(razao_social, cnpj_cpf)')
+      .lt('data_vencimento', today)
+      .gt('saldo_em_aberto', 0)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+
+  const clienteMap = new Map<number, {
+    nome: string; cnpj?: string; total: number; count: number; oldest: string;
+  }>();
+
+  for (const r of rows) {
+    if (!r.cliente_id) continue;
+    const saldo = Number(r.saldo_em_aberto) || 0;
+    const existing = clienteMap.get(r.cliente_id);
+    if (existing) {
+      existing.total += saldo;
+      existing.count++;
+      if (r.data_vencimento < existing.oldest) existing.oldest = r.data_vencimento;
+    } else {
+      clienteMap.set(r.cliente_id, {
+        nome: r.dim_cliente?.razao_social ?? 'Desconhecido',
+        cnpj: r.dim_cliente?.cnpj_cpf ?? undefined,
+        total: saldo,
+        count: 1,
+        oldest: r.data_vencimento,
+      });
+    }
+  }
+
+  return Array.from(clienteMap.entries())
+    .map(([clienteId, data]) => ({
+      clienteId,
+      clienteNome: data.nome,
+      clienteCnpjCpf: data.cnpj,
+      totalVencido: data.total,
+      titulosVencidos: data.count,
+      diasMaisAntigo: daysOverdueFromString(data.oldest),
+      dataVencimentoMaisAntigo: data.oldest,
+    }))
+    .sort((a, b) => b.totalVencido - a.totalVencido)
+    .slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// 8. getConcentracaoCarteira
+// ---------------------------------------------------------------------------
+
+export async function getConcentracaoCarteira(
+  filters: DashboardFilters,
+): Promise<ConcentracaoData[]> {
+  const rows = await fetchAllRows<{
+    cliente_id: number;
+    saldo_em_aberto: number;
+    dim_cliente: { razao_social: string } | null;
+  }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('cliente_id, saldo_em_aberto, dim_cliente(razao_social)')
+      .gt('saldo_em_aberto', 0)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+
+  const clienteMap = new Map<number, { nome: string; saldo: number }>();
+  let grandTotal = 0;
+  for (const r of rows) {
+    if (!r.cliente_id) continue;
+    const saldo = Number(r.saldo_em_aberto) || 0;
+    grandTotal += saldo;
+    const existing = clienteMap.get(r.cliente_id);
+    if (existing) { existing.saldo += saldo; }
+    else { clienteMap.set(r.cliente_id, { nome: r.dim_cliente?.razao_social ?? 'Desconhecido', saldo }); }
+  }
+
+  const sorted = Array.from(clienteMap.values()).sort((a, b) => b.saldo - a.saldo);
+
+  const result: ConcentracaoData[] = [];
+  for (const topN of [5, 10, 20]) {
+    const slice = sorted.slice(0, topN);
+    const totalSaldo = slice.reduce((sum, c) => sum + c.saldo, 0);
+    result.push({
+      topN,
+      label: `Top ${topN}`,
+      totalSaldo,
+      percentual: grandTotal > 0 ? (totalSaldo / grandTotal) * 100 : 0,
+      clientes: slice,
+    });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// 9. getEvolucaoMensal
+// ---------------------------------------------------------------------------
+
+export async function getEvolucaoMensal(
+  filters: DashboardFilters,
+): Promise<EvolucaoMensalData[]> {
+  const months: { start: string; end: string; key: string; label: string }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const shortMonth = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][month];
+    const label = `${shortMonth}/${String(year).slice(2)}`;
+    months.push({ start, end, key: `${year}-${String(month + 1).padStart(2, '0')}`, label });
+  }
+
+  // Recebimentos nos ultimos 12 meses
+  const needsJoin = hasDimensionFilters(filters);
+  const recebSelect = needsJoin
+    ? 'data_baixa, valor_baixado, valor_juros, valor_multa, fact_titulo_receber!inner(conta_corrente_id, vendedor_id, departamento_id)'
+    : 'data_baixa, valor_baixado, valor_juros, valor_multa';
+
+  const recebRows = await fetchAllRows<{ data_baixa: string; valor_baixado: number; valor_juros: number; valor_multa: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_recebimento')
+      .select(recebSelect)
+      .gte('data_baixa', months[0].start)
+      .lte('data_baixa', months[months.length - 1].end)
+      .range(from, to);
+    if (needsJoin) applyRecebDimensionFilters(q, filters);
+    return q;
+  });
+
+  // Titulos vencidos (saldo aberto com vencimento no passado)
+  const tituloRows = await fetchAllRows<{ data_vencimento: string; saldo_em_aberto: number }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('data_vencimento, saldo_em_aberto')
+      .gt('saldo_em_aberto', 0)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+
+  return months.map((m) => {
+    const recebido = recebRows
+      .filter((r) => r.data_baixa >= m.start && r.data_baixa <= m.end)
+      .reduce((sum, r) => sum + (Number(r.valor_baixado) || 0) + (Number(r.valor_juros) || 0) + (Number(r.valor_multa) || 0), 0);
+
+    // Saldo em aberto: titulos com vencimento neste mes que ainda tem saldo
+    const saldoEmAberto = tituloRows
+      .filter((r) => r.data_vencimento >= m.start && r.data_vencimento <= m.end)
+      .reduce((sum, r) => sum + (Number(r.saldo_em_aberto) || 0), 0);
+
+    // Vencido: titulos com vencimento antes deste mes que ainda tem saldo
+    const vencido = tituloRows
+      .filter((r) => r.data_vencimento < m.start)
+      .reduce((sum, r) => sum + (Number(r.saldo_em_aberto) || 0), 0);
+
+    return { mes: m.key, mesLabel: m.label, recebido, vencido, saldoEmAberto };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 10. getVendedorPerformance
+// ---------------------------------------------------------------------------
+
+export async function getVendedorPerformance(
+  filters: DashboardFilters,
+): Promise<VendedorPerformance[]> {
+  const today = todayISO();
+
+  const rows = await fetchAllRows<{
+    vendedor_id: number;
+    data_vencimento: string;
+    saldo_em_aberto: number;
+    dim_vendedor: { nome: string } | null;
+  }>((from, to) => {
+    const q = supabaseAdmin
+      .from('fact_titulo_receber')
+      .select('vendedor_id, data_vencimento, saldo_em_aberto, dim_vendedor(nome)')
+      .gt('saldo_em_aberto', 0)
+      .not('vendedor_id', 'is', null)
+      .range(from, to);
+    applyDimensionFilters(q, filters);
+    return q;
+  });
+
+  const vendMap = new Map<number, {
+    nome: string; aReceber: number; vencido: number; titTotal: number; titVencidos: number;
+  }>();
+
+  for (const r of rows) {
+    if (!r.vendedor_id) continue;
+    const saldo = Number(r.saldo_em_aberto) || 0;
+    const isOverdue = r.data_vencimento < today;
+    const existing = vendMap.get(r.vendedor_id);
+    if (existing) {
+      existing.aReceber += saldo;
+      existing.titTotal++;
+      if (isOverdue) { existing.vencido += saldo; existing.titVencidos++; }
+    } else {
+      vendMap.set(r.vendedor_id, {
+        nome: r.dim_vendedor?.nome ?? 'Sem vendedor',
+        aReceber: saldo,
+        vencido: isOverdue ? saldo : 0,
+        titTotal: 1,
+        titVencidos: isOverdue ? 1 : 0,
+      });
+    }
+  }
+
+  return Array.from(vendMap.entries())
+    .map(([vendedorId, data]) => ({
+      vendedorId,
+      vendedorNome: data.nome,
+      totalAReceber: data.aReceber,
+      totalVencido: data.vencido,
+      taxaInadimplencia: data.aReceber > 0 ? (data.vencido / data.aReceber) * 100 : 0,
+      titulosTotal: data.titTotal,
+      titulosVencidos: data.titVencidos,
+    }))
+    .sort((a, b) => b.totalAReceber - a.totalAReceber);
 }
 
 // ---------------------------------------------------------------------------

@@ -5,8 +5,14 @@ import { FilterBar } from '@/components/filters/FilterBar';
 import { KPICards } from '@/components/dashboard/KPICards';
 import { HorizonBarChart } from '@/components/charts/HorizonBarChart';
 import { DailyReceivablesChart } from '@/components/charts/DailyReceivablesChart';
+import { AgingChart } from '@/components/charts/AgingChart';
+import { ConcentracaoChart } from '@/components/charts/ConcentracaoChart';
+import { EvolucaoMensalChart } from '@/components/charts/EvolucaoMensalChart';
+import { VendedorPerformanceChart } from '@/components/charts/VendedorPerformanceChart';
 import { TitulosTable } from '@/components/tables/TitulosTable';
 import { RecebimentosTable } from '@/components/tables/RecebimentosTable';
+import { TopInadimplentesTable } from '@/components/tables/TopInadimplentesTable';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { BarChart3 } from 'lucide-react';
 import type { DashboardFilters } from '@/types/dashboard';
@@ -54,6 +60,28 @@ export function DashboardShell() {
         <KPICards filters={filters} />
         <HorizonBarChart filters={filters} />
         <DailyReceivablesChart filters={filters} />
+
+        <SectionHeader
+          title="Analise de Inadimplencia"
+          description="Visao detalhada do aging da carteira, concentracao de risco e principais devedores."
+        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <AgingChart filters={filters} />
+          <ConcentracaoChart filters={filters} />
+        </div>
+        <TopInadimplentesTable filters={filters} />
+
+        <SectionHeader
+          title="Analise Gerencial"
+          description="Evolucao mensal de recebimentos e performance da equipe comercial."
+        />
+        <EvolucaoMensalChart filters={filters} />
+        <VendedorPerformanceChart filters={filters} />
+
+        <SectionHeader
+          title="Detalhamento"
+          description="Tabelas completas de titulos e recebimentos com todos os registros do periodo."
+        />
         <TitulosTable filters={filters} />
         <RecebimentosTable filters={filters} />
       </main>
